@@ -42,23 +42,59 @@ def validate_standardized_data(mat_file_path: str) -> bool:
             standardized_data = mat_data['standardized_data']
         except NotImplementedError:
             # Use h5py for v7.3 files
-            with h5py.File(str(mat_path), 'r') as f:
-                standardized_data_ref = f['standardized_data']
-                n_datasets = int(standardized_data_ref['n_datasets'][0, 0])
-                standardized_data = {'n_datasets': n_datasets}
-                
-                for i in range(1, n_datasets + 1):
-                    dataset_name = f'dataset_{i:03d}'
-                    if dataset_name in standardized_data_ref:
-                        dataset_ref = standardized_data_ref[dataset_name]
-                        standardized_data[dataset_name] = {}
-                        for field in ['dff', 'zscore', 'stim', 'response', 'phase', 'mouse', 'label', 'dataset_type']:
-                            if field in dataset_ref:
-                                field_ref = dataset_ref[field]
-                                if hasattr(field_ref, '__getitem__'):
-                                    standardized_data[dataset_name][field] = field_ref[()]
-                                else:
-                                    standardized_data[dataset_name][field] = field_ref
+            try:
+                with h5py.File(str(mat_path), 'r') as f:
+                    if 'standardized_data' not in f:
+                        raise ValueError("File does not contain 'standardized_data' structure")
+                    
+                    standardized_data_ref = f['standardized_data']
+                    
+                    # Get n_datasets
+                    if 'n_datasets' in standardized_data_ref:
+                        n_datasets_ref = standardized_data_ref['n_datasets']
+                        if isinstance(n_datasets_ref, h5py.Dataset):
+                            n_datasets = int(n_datasets_ref[0, 0])
+                        else:
+                            n_datasets = int(n_datasets_ref)
+                    else:
+                        # Count datasets manually
+                        dataset_fields = [k for k in standardized_data_ref.keys() if k.startswith('dataset_')]
+                        n_datasets = len(dataset_fields)
+                    
+                    standardized_data = {'n_datasets': n_datasets}
+                    
+                    # Load each dataset
+                    for i in range(1, n_datasets + 1):
+                        dataset_name = f'dataset_{i:03d}'
+                        if dataset_name in standardized_data_ref:
+                            dataset_ref = standardized_data_ref[dataset_name]
+                            standardized_data[dataset_name] = {}
+                            
+                            # Helper function to read h5py data
+                            def read_h5py_data(ref):
+                                if isinstance(ref, h5py.Dataset):
+                                    return np.array(ref)
+                                elif isinstance(ref, h5py.Group):
+                                    # String reference
+                                    if len(ref.keys()) == 0:
+                                        return None
+                                    # Try to read as string
+                                    try:
+                                        return ''.join(chr(c) for c in ref[:])
+                                    except:
+                                        return None
+                                return None
+                            
+                            for field in ['dff', 'zscore', 'stim', 'response', 'phase', 'mouse', 'label', 'dataset_type']:
+                                if field in dataset_ref:
+                                    field_ref = dataset_ref[field]
+                                    data = read_h5py_data(field_ref)
+                                    if data is not None:
+                                        standardized_data[dataset_name][field] = data
+            except Exception as h5py_error:
+                logger.error(f"Failed to load v7.3 file with h5py: {h5py_error}")
+                logger.error("Try using scipy.io.loadmat with struct_as_record=False or convert file to v7.0 format")
+                raise
     except Exception as e:
         logger.error(f"Failed to load data: {e}")
         return False

@@ -192,7 +192,13 @@ function std_data = standardize_cdkl5_data(data)
             allen_parcels_data = [];
             if istable(wt_struct)
                 if ismember('allen_parcels', field_names)
-                    allen_parcels_data = animal.allen_parcels{1};
+                    % Handle both cell and direct matrix storage
+                    temp_data = animal.allen_parcels;
+                    if iscell(temp_data)
+                        allen_parcels_data = temp_data{1};
+                    else
+                        allen_parcels_data = temp_data;
+                    end
                 end
             else
                 if isfield(animal, 'allen_parcels')
@@ -237,7 +243,12 @@ function std_data = standardize_cdkl5_data(data)
                     % Get mouse ID
                     if istable(wt_struct)
                         if ismember('mouse', field_names)
-                            mouse_id = animal.mouse{1};
+                            temp_mouse = animal.mouse;
+                            if iscell(temp_mouse)
+                                mouse_id = temp_mouse{1};
+                            else
+                                mouse_id = temp_mouse;
+                            end
                         else
                             mouse_id = sprintf('wt_%03d', i);
                         end
@@ -298,7 +309,13 @@ function std_data = standardize_cdkl5_data(data)
             allen_parcels_data = [];
             if istable(mut_struct)
                 if ismember('allen_parcels', field_names)
-                    allen_parcels_data = animal.allen_parcels{1};
+                    % Handle both cell and direct matrix storage
+                    temp_data = animal.allen_parcels;
+                    if iscell(temp_data)
+                        allen_parcels_data = temp_data{1};
+                    else
+                        allen_parcels_data = temp_data;
+                    end
                 end
             else
                 if isfield(animal, 'allen_parcels')
@@ -342,7 +359,12 @@ function std_data = standardize_cdkl5_data(data)
                     % Get mouse ID
                     if istable(mut_struct)
                         if ismember('mouse', field_names)
-                            mouse_id = animal.mouse{1};
+                            temp_mouse = animal.mouse;
+                            if iscell(temp_mouse)
+                                mouse_id = temp_mouse{1};
+                            else
+                                mouse_id = temp_mouse;
+                            end
                         else
                             mouse_id = sprintf('mut_%03d', i);
                         end
