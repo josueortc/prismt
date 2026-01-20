@@ -1,32 +1,34 @@
-# PRISMT: Unified Pipeline for Widefield and CDKL5 Data
+# PRISMT: Data Standardization Pipeline
 
-PRISMT (Pipeline for Research In Standardized Modeling and Training) provides a unified interface for training transformer models on widefield calcium imaging data, supporting both standard widefield experiments and CDKL5 genotype classification tasks.
+PRISMT (Pipeline for Research In Standardized Modeling and Training) provides tools for standardizing widefield calcium imaging data into a unified MATLAB format.
+
+## Overview
+
+PRISMT standardizes raw widefield and CDKL5 data into a consistent format that can be used for training transformer models. The standardization process ensures data consistency, handles different input formats, and prepares data for downstream analysis.
 
 ## Quick Start
 
-1. **Standardize your data** (see [WIKI.md](WIKI.md) for detailed instructions):
-   ```matlab
-   cd('scripts')
-   standardize_data('input.mat', 'standardized.mat', 'cdkl5')  % or 'widefield'
-   ```
+### 1. Standardize Your Data
 
-2. **Validate standardized data**:
-   ```bash
-   python scripts/validate_data.py standardized.mat
-   ```
+```matlab
+cd('scripts')
+standardize_data('input.mat', 'standardized.mat', 'cdkl5')  % or 'widefield'
+```
 
-3. **Train model**:
-   ```bash
-   python train.py --data_path standardized.mat --task_type genotype --epochs 100
-   ```
+### 2. Validate Standardized Data
 
-## Features
+```bash
+python scripts/validate_data.py standardized.mat
+```
 
-- **Unified Data Format**: Standardized MATLAB data structure for both widefield and CDKL5 data
-- **Automatic Task Detection**: Automatically detects whether data is for phase classification or genotype classification
-- **Flexible Training**: Single training script handles both task types
-- **Data Validation**: Built-in validation script to verify data structure
-- **Modular Architecture**: Clean separation of data loading, models, and training
+## Documentation
+
+**📖 [GitHub Wiki](https://github.com/josueortc/prismt/wiki)** - Comprehensive guide on data standardization:
+- Data standardization overview
+- Preparing widefield data
+- Preparing CDKL5 data
+- Standardized data format specification
+- Validation and troubleshooting
 
 ## Installation
 
@@ -36,68 +38,77 @@ cd prismt
 pip install -r requirements.txt
 ```
 
-## Documentation
-
-- **[WIKI.md](WIKI.md)**: Comprehensive guide on preparing `.mat` files for PRISMT
-  - Data standardization process
-  - Widefield data preparation
-  - CDKL5 data preparation
-  - Validation and troubleshooting
-  - Complete workflow examples
-
 ## Project Structure
 
 ```
 prismt/
-├── data/                    # Data loading modules
+├── scripts/
+│   ├── standardize_data.m  # MATLAB standardization script
+│   └── validate_data.py   # Python validation script
+├── data/                   # Data loading modules
 ├── models/                 # Model architectures
 ├── training/               # Training utilities
 ├── utils/                  # Utility functions
-├── scripts/                # Utility scripts
-│   ├── standardize_data.m  # MATLAB standardization script
-│   └── validate_data.py   # Python validation script
-├── train.py               # Unified training script
-├── WIKI.md               # Data preparation guide (START HERE!)
-└── README.md             # This file
+└── README.md              # This file
 ```
 
-## Usage
+## Data Standardization
 
-### CDKL5 Genotype Classification
+The standardization process converts raw data into a unified format:
+
+### Input Formats Supported
+
+- **Widefield Data**: MATLAB table `T` with columns: `dff`, `zscore`, `stim`, `response`, `phase`, `mouse`
+- **CDKL5 Data**: MATLAB structures `cdkl5_m_wt_struct` and/or `cdkl5_m_mut_struct` with `allen_parcels` data
+
+### Output Format
+
+All standardized data follows this structure:
+
+```matlab
+standardized_data
+├── n_datasets: scalar integer
+└── dataset_XXX: struct
+    ├── dff: (trials, timepoints, brain_areas)
+    ├── zscore: (trials, timepoints, brain_areas)
+    ├── stim: (trials, 1)
+    ├── response: (trials, 1)
+    ├── phase: char array
+    ├── mouse: char array
+    ├── label: scalar (optional, for CDKL5)
+    └── dataset_type: 'widefield' or 'cdkl5'
+```
+
+## Usage Examples
+
+### Standardize CDKL5 Data
+
+```matlab
+% In MATLAB
+cd('scripts')
+standardize_data('cdkl5_raw.mat', 'standardized_cdkl5.mat', 'cdkl5')
+```
+
+### Standardize Widefield Data
+
+```matlab
+% In MATLAB
+cd('scripts')
+standardize_data('widefield_raw.mat', 'standardized_widefield.mat', 'widefield')
+```
+
+### Validate Standardized Data
 
 ```bash
-# 1. Standardize data (in MATLAB)
-matlab -nodisplay -nosplash -r "cd('scripts'); standardize_data('input.mat', 'output.mat', 'cdkl5'); exit"
-
-# 2. Validate
-python scripts/validate_data.py output.mat
-
-# 3. Train
-python train.py --data_path output.mat --task_type genotype --epochs 100
+python scripts/validate_data.py standardized.mat
 ```
 
-### Widefield Phase Classification
+## Key Features
 
-```bash
-# 1. Standardize data (in MATLAB)
-matlab -nodisplay -nosplash -r "cd('scripts'); standardize_data('input.mat', 'output.mat', 'widefield'); exit"
-
-# 2. Validate
-python scripts/validate_data.py output.mat
-
-# 3. Train
-python train.py --data_path output.mat --task_type phase --phase1 early --phase2 late --epochs 100
-```
-
-## Training Options
-
-See `python train.py --help` for all options. Key parameters:
-
-- `--data_path`: Path to standardized .mat file (required)
-- `--task_type`: 'auto', 'genotype', or 'phase'
-- `--epochs`: Number of training epochs (default: 100)
-- `--batch_size`: Batch size (default: 16)
-- `--learning_rate`: Learning rate (default: 5e-5)
+- **Unified Format**: Consistent structure for both widefield and CDKL5 data
+- **Automatic Detection**: Handles different data orientations and formats
+- **Validation**: Built-in validation script to verify data structure
+- **Error Handling**: Robust error checking and NaN handling
 
 ## Citation
 
@@ -116,4 +127,4 @@ See `python train.py --help` for all options. Key parameters:
 
 ## Contact
 
-For questions or issues, please open an issue on GitHub.
+For questions or issues, please open an issue on GitHub or visit the [Wiki](https://github.com/josueortc/prismt/wiki).
