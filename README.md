@@ -99,6 +99,22 @@ If the format is invalid, the GUI shows a **clear error message** explaining wha
 4. **Training** – Set batch size, epochs, output directory, SLURM options.
 5. **Run** – Click **Run Training Now** (local) or **Generate Cluster Script** (SLURM).
 
+### Condition Selection from Data
+
+After loading a dataset, the GUI automatically extracts and populates:
+- **Phases** (e.g. early, mid, late) from the `phase` column
+- **Stim values** from the `stim` column
+- **Response values** from the `response` column
+
+Select the comparison conditions directly from your data.
+
+### Hyperparameter Optimization (Optuna)
+
+Select **HPO (Optuna)** in the Mode dropdown to run Optuna-based hyperparameter search:
+- Searches over: lr, scheduler, batch_size, hidden_dim, num_heads, num_layers, dropout, weight_decay
+- Saves best checkpoint and `best_summary.json` to the output directory
+- Run: `python hpo_optuna.py --data_path ... --phase1 early --phase2 late --n_trials 30`
+
 ### Common Format Errors and Fixes
 
 | Error | Cause | Fix |
@@ -246,6 +262,8 @@ git clone https://github.com/josueortc/prismt.git
 cd prismt
 pip install -r requirements.txt
 ```
+
+The `requirements.txt` includes `optuna>=3.0.0` for hyperparameter optimization.
 
 ## Citation
 

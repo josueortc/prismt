@@ -24,7 +24,7 @@ sys.path.append(str(project_root))
 
 from data.data_loader import WidefieldDataset, TaskDefinition, WidefieldTrialDataset
 from models.transformer import create_model
-from training.trainer import Trainer
+from training.trainer import Trainer, run_attention_and_diagnosis
 from utils.helpers import setup_logging, set_seed, get_device, format_time
 
 logger = logging.getLogger(__name__)
@@ -452,6 +452,8 @@ def parse_arguments():
                         help='Random seed')
     parser.add_argument('--save_dir', type=str, default='results',
                         help='Directory to save results')
+    parser.add_argument('--attention_samples', type=int, default=1000,
+                        help='Number of samples for attention extraction (post-training)')
     
     # WandB arguments
     parser.add_argument('--wandb_project', type=str, default='prismt',
@@ -582,6 +584,18 @@ def main():
     logger.info("Running final validation...")
     val_loss, val_acc, val_f1 = trainer.validate_epoch()
     logger.info(f"Final validation - Loss: {val_loss:.4f}, Accuracy: {val_acc:.4f}, F1: {val_f1:.4f}")
+    
+    # Attention extraction and diagnosis on best model
+    logger.info("Extracting attention and running diagnosis on best model...")
+    best_model = trainer.get_best_model()
+    run_attention_and_diagnosis(
+        model=best_model,
+        data_loader=val_loader,
+        device=device,
+        save_dir=args.save_dir,
+        num_samples=args.attention_samples,
+        num_classes=2,
+    )
     
     logger.info("=" * 80)
     logger.info("Training pipeline completed successfully!")

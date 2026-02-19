@@ -1,0 +1,9 @@
+PRISMT Training Config
+======================
+Data: /Users/josueortegacaro/Documents/hannah_data/tableForModeling.mat
+Task: phase
+Phases: early vs late
+Batch: 16 Epochs: 100
+
+Local: python "/Users/josueortegacaro/repos/prismt/train.py" --data_path "/Users/josueortegacaro/Documents/hannah_data/tableForModeling.mat" --data_type dff --task_type phase --phase1 early --phase2 late --batch_size 16 --epochs 100 --learning_rate 5e-5 --val_split 0.20 --seed 42 --save_dir results
+Cluster: sbatch /Users/josueortegacaro/repos/prismt/generated_scripts/run_training.sh

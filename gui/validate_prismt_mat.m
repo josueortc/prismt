@@ -13,7 +13,8 @@ function [ok, info, errMsg] = validate_prismt_mat(pathStr)
 %     2. Table T with columns dff, zscore, stim, response, phase, mouse
 
     ok = false;
-    info = struct('n_datasets', 0, 'n_trials', 0, 'n_timepoints', 0, 'n_regions', 0);
+    info = struct('n_datasets', 0, 'n_trials', 0, 'n_timepoints', 0, 'n_regions', 0, ...
+        'phases', {{}}, 'stim_values', [], 'response_values', []);
     errMsg = '';
 
     % 1. Path checks
@@ -137,15 +138,9 @@ function [ok, info, errMsg] = validate_prismt_mat(pathStr)
 
         info.n_datasets = nDs;
 
-        if isfield(ds1, 'stim') && isfield(ds1, 'response') && isfield(ds1, 'phase') && isfield(ds1, 'mouse')
-            % All metadata present
-        else
-            missing = {};
-            if ~isfield(ds1, 'stim'), missing{end+1} = 'stim'; end
-            if ~isfield(ds1, 'response'), missing{end+1} = 'response'; end
-            if ~isfield(ds1, 'phase'), missing{end+1} = 'phase'; end
-            if ~isfield(ds1, 'mouse'), missing{end+1} = 'mouse'; end
-        end
+        info.phases = extract_unique_values(pd, 'phase');
+        info.stim_values = extract_unique_numeric(pd, 'stim');
+        info.response_values = extract_unique_numeric(pd, 'response');
         ok = true;
         return;
     end
@@ -222,5 +217,92 @@ function [ok, info, errMsg] = validate_prismt_mat(pathStr)
     end
 
     info.n_datasets = nDs;
+    info.phases = extract_unique_values_table(T, 'phase');
+    info.stim_values = extract_unique_numeric_table(T, 'stim');
+    info.response_values = extract_unique_numeric_table(T, 'response');
     ok = true;
+end
+
+function vals = extract_unique_values(pd, fieldName)
+    vals = {'early', 'mid', 'late'};
+    fn = fieldnames(pd);
+    dsFn = fn(~cellfun(@isempty, strfind(fn, 'dataset_')));
+    seen = containers.Map('KeyType', 'char', 'ValueType', 'logical');
+    out = {};
+    for i = 1:min(20, length(dsFn))
+        ds = pd.(dsFn{i});
+        if ~isfield(ds, fieldName), continue; end
+        v = ds.(fieldName);
+        if ischar(v)
+            s = strtrim(lower(v));
+            if ~isempty(s) && ~isKey(seen, s), out{end+1} = s; seen(s) = true; end
+        elseif iscell(v)
+            for j = 1:numel(v)
+                s = strtrim(lower(char(string(v{j}))));
+                if ~isempty(s) && length(s) < 30 && ~isKey(seen, s), out{end+1} = s; seen(s) = true; end
+            end
+        else
+            s = strtrim(lower(char(string(v))));
+            if ~isempty(s) && ~isKey(seen, s), out{end+1} = s; seen(s) = true; end
+        end
+    end
+    if ~isempty(out), vals = out; end
+end
+
+function vals = extract_unique_numeric(pd, fieldName)
+    vals = [];
+    fn = fieldnames(pd);
+    dsFn = fn(~cellfun(@isempty, strfind(fn, 'dataset_')));
+    for i = 1:min(20, length(dsFn))
+        ds = pd.(dsFn{i});
+        if isfield(ds, fieldName)
+            v = ds.(fieldName);
+            if isnumeric(v), vals = [vals; v(:)]; end
+        end
+    end
+    vals = unique(vals(~isnan(vals)));
+    if isempty(vals), vals = 1; end
+end
+
+function vals = extract_unique_values_table(T, fieldName)
+    vals = {'early', 'mid', 'late'};
+    if ~ismember(fieldName, T.Properties.VariableNames), return; end
+    try
+        col = T.(fieldName);
+        seen = containers.Map('KeyType', 'char', 'ValueType', 'logical');
+        out = {};
+        nRows = min(height(T), 50);
+        for i = 1:nRows
+            if iscell(col)
+                v = col{i};
+            else
+                v = col(i);
+            end
+            if iscell(v), v = v{1}; end
+            s = strtrim(lower(char(string(v))));
+            if ~isempty(s) && length(s) < 50 && ~isKey(seen, s)
+                out{end+1} = s;
+                seen(s) = true;
+            end
+        end
+        if ~isempty(out), vals = out; end
+    catch
+    end
+end
+
+function vals = extract_unique_numeric_table(T, fieldName)
+    vals = 1;
+    if ~ismember(fieldName, T.Properties.VariableNames), return; end
+    try
+        col = T.(fieldName);
+        out = [];
+        for i = 1:min(height(T), 50)
+            if iscell(col), v = col{i}; else, v = col(i); end
+            if iscell(v), v = v{1}; end
+            if isnumeric(v), out = [out; v(:)]; end
+        end
+        out = unique(out(~isnan(out)));
+        if ~isempty(out), vals = out; end
+    catch
+    end
 end

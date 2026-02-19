@@ -2,11 +2,13 @@
 Training utilities for the widefield transformer model.
 """
 
+import json
 import logging
 import os
 import math
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -870,3 +872,147 @@ def extract_attention_rollout(
         logger.info(f"Saved attention matrix and animal IDs to {save_path}")
     
     return all_attention, all_animal_ids
+
+
+def run_diagnosis(
+    model: WidefieldTransformer,
+    data_loader: DataLoader,
+    device: torch.device,
+    save_dir: str,
+    num_classes: int = 2,
+) -> Dict:
+    """
+    Run model diagnosis: confusion matrix, per-class metrics, per-animal accuracy.
+    
+    Args:
+        model: Trained model
+        data_loader: Data loader for evaluation (val or test)
+        device: Device to run on
+        save_dir: Directory to save diagnosis outputs
+        num_classes: Number of classes (default 2)
+        
+    Returns:
+        Diagnosis dictionary with metrics
+    """
+    model.eval()
+    all_predictions = []
+    all_labels = []
+    all_logits = []
+    all_mouse_ids = []
+    
+    with torch.no_grad():
+        for batch in data_loader:
+            if len(batch) == 2:
+                data, labels = batch
+                mouse_ids = ["unknown"] * data.size(0)
+            elif len(batch) == 3:
+                data, labels, mouse_ids = batch
+            else:
+                raise ValueError(f"Unexpected batch format: {len(batch)} elements")
+            data = data.to(device)
+            labels = labels.to(device)
+            logits, _ = model(data)
+            preds = logits.argmax(dim=-1)
+            all_predictions.extend(preds.cpu().numpy())
+            all_labels.extend(labels.cpu().numpy())
+            all_logits.extend(logits.cpu().numpy())
+            all_mouse_ids.extend(mouse_ids)
+    
+    all_predictions = np.array(all_predictions)
+    all_labels = np.array(all_labels)
+    all_logits = np.array(all_logits)
+    all_mouse_ids = np.array(all_mouse_ids)
+    
+    # Confusion matrix
+    confusion = np.zeros((num_classes, num_classes), dtype=np.int64)
+    for p, l in zip(all_predictions, all_labels):
+        confusion[int(l), int(p)] += 1
+    
+    # Per-class metrics
+    tp = np.sum((all_predictions == 1) & (all_labels == 1))
+    fp = np.sum((all_predictions == 1) & (all_labels == 0))
+    fn = np.sum((all_predictions == 0) & (all_labels == 1))
+    tn = np.sum((all_predictions == 0) & (all_labels == 0))
+    
+    precision_1 = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+    recall_1 = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    f1_1 = 2 * (precision_1 * recall_1) / (precision_1 + recall_1) if (precision_1 + recall_1) > 0 else 0.0
+    
+    precision_0 = tn / (tn + fn) if (tn + fn) > 0 else 0.0
+    recall_0 = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+    f1_0 = 2 * (precision_0 * recall_0) / (precision_0 + recall_0) if (precision_0 + recall_0) > 0 else 0.0
+    macro_f1 = (f1_0 + f1_1) / 2
+    accuracy = (all_predictions == all_labels).mean()
+    
+    # Per-animal accuracy (if mouse IDs available and not all "unknown")
+    per_animal = {}
+    if len(np.unique(all_mouse_ids)) > 1 or (len(np.unique(all_mouse_ids)) == 1 and "unknown" not in str(np.unique(all_mouse_ids)[0])):
+        for mid in np.unique(all_mouse_ids):
+            mask = all_mouse_ids == mid
+            if mask.sum() > 0:
+                acc = (all_predictions[mask] == all_labels[mask]).mean()
+                per_animal[str(mid)] = {"accuracy": float(acc), "n_trials": int(mask.sum())}
+    
+    diagnosis = {
+        "accuracy": float(accuracy),
+        "macro_f1": float(macro_f1),
+        "confusion_matrix": confusion.tolist(),
+        "class_0": {"precision": precision_0, "recall": recall_0, "f1": f1_0},
+        "class_1": {"precision": precision_1, "recall": recall_1, "f1": f1_1},
+        "per_animal": per_animal,
+    }
+    
+    os.makedirs(save_dir, exist_ok=True)
+    np.save(os.path.join(save_dir, "confusion_matrix.npy"), confusion)
+    with open(os.path.join(save_dir, "diagnosis_report.json"), "w") as f:
+        json.dump(diagnosis, f, indent=2)
+    
+    logger.info("Diagnosis complete:")
+    logger.info(f"  Accuracy: {accuracy:.4f}, Macro F1: {macro_f1:.4f}")
+    logger.info(f"  Confusion matrix:\n{confusion}")
+    logger.info(f"  Saved to {save_dir}/diagnosis_report.json and confusion_matrix.npy")
+    
+    return diagnosis
+
+
+def run_attention_and_diagnosis(
+    model: WidefieldTransformer,
+    data_loader: DataLoader,
+    device: torch.device,
+    save_dir: str,
+    num_samples: int = 1000,
+    num_classes: int = 2,
+) -> Tuple[Dict, np.ndarray, np.ndarray]:
+    """
+    Extract attention rollout and run diagnosis on the selected model.
+    
+    Args:
+        model: Trained model (best model recommended)
+        data_loader: Data loader for evaluation
+        device: Device to run on
+        save_dir: Directory to save outputs
+        num_samples: Number of samples for attention extraction
+        num_classes: Number of classes for diagnosis
+        
+    Returns:
+        Tuple of (diagnosis_dict, attention_matrix, animal_ids)
+    """
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Attention extraction
+    attention_path = os.path.join(save_dir, "attention_rollout.npy")
+    attention_matrix, animal_ids = extract_attention_rollout(
+        model, data_loader, device,
+        num_samples=num_samples,
+        save_path=attention_path,
+    )
+    logger.info(f"Attention rollout saved to {attention_path}")
+    
+    # Diagnosis
+    diagnosis = run_diagnosis(
+        model, data_loader, device,
+        save_dir=save_dir,
+        num_classes=num_classes,
+    )
+    
+    return diagnosis, attention_matrix, animal_ids
