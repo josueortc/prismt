@@ -40,18 +40,73 @@ standardized_data
 
 ## Quick Start
 
-### 1. Standardize Your Data
+### 1. Launch the GUI (MATLAB users)
+
+From the project root, double-click `run_prismt_gui.m` or run in the Command Window:
+
+```matlab
+run_prismt_gui
+```
+
+No need to change directories. The GUI works with any trial-based dataset (widefield, CDKL5, or custom) in the standardized format.
+
+### 2. Standardize Your Data
 
 ```matlab
 cd('scripts')
 standardize_data('input.mat', 'standardized.mat', 'cdkl5')  % or 'widefield'
 ```
 
-### 2. Validate Standardized Data
+### 3. Validate Standardized Data
 
 ```bash
 python scripts/validate_data.py standardized.mat
 ```
+
+---
+
+## MATLAB GUI Specification
+
+The PRISMT GUI provides a Suite2P-style interface for configuring and launching training. It works with **any** trial-based neural dataset (widefield, CDKL5, or custom) in the standardized format.
+
+### Launching the GUI
+
+| Method | Steps |
+|--------|-------|
+| **Double-click** | Open project in MATLAB, double-click `run_prismt_gui.m` in Current Folder |
+| **Command Window** | From project root: `run_prismt_gui` |
+| **Direct call** | After `addpath('gui')`: `prismt_training_setup()` |
+
+**Requirements:** MATLAB R2016a or newer.
+
+### Supported Dataset Formats
+
+The GUI accepts `.mat` files in either format:
+
+1. **processed_data** – Struct with `dataset_001`, `dataset_002`, ... each containing:
+   - `dff` (required): 3D array `(trials × timepoints × regions)`
+   - `zscore` (optional), `stim`, `response`, `phase`, `mouse`
+
+2. **Table T** – MATLAB table with columns: `dff`, `zscore`, `stim`, `response`, `phase`, `mouse`
+
+If the format is invalid, the GUI shows a **clear error message** explaining what is wrong and how to fix it.
+
+### GUI Workflow
+
+1. **Load Dataset** – Browse and Load your `.mat` file. Validation runs automatically.
+2. **Input & Tokenization** – Select data type (dff/zscore) and normalization.
+3. **Conditions** – Choose task (Phase or Genotype), phases, stim/response filters.
+4. **Training** – Set batch size, epochs, output directory, SLURM options.
+5. **Run** – Click **Run Training Now** (local) or **Generate Cluster Script** (SLURM).
+
+### Common Format Errors and Fixes
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| "File must contain processed_data or table T" | Wrong structure | Use `standardize_data()` to create correct format |
+| "Dataset is missing 'dff' field" | Incomplete dataset struct | Each dataset_XXX must have a `dff` field |
+| "dff must be 3-dimensional" | dff is 2D or 4D | Reshape to (trials, timepoints, regions) |
+| "Table T is missing required columns" | Wrong table columns | Add dff, stim, response, phase, mouse columns |
 
 ## Input Formats Supported
 
@@ -152,6 +207,11 @@ neural_data = ds1.dff(selected_trials, :, :);  % (n_selected_trials, timepoints,
 
 ```
 prismt/
+├── run_prismt_gui.m       # Quick launcher for MATLAB GUI (double-click or run_prismt_gui)
+├── gui/
+│   ├── prismt_training_setup.m   # Main GUI
+│   ├── validate_prismt_mat.m     # Dataset format validation with clear errors
+│   └── generate_widefield_sample.m
 ├── scripts/
 │   ├── standardize_data.m  # MATLAB standardization script
 │   └── validate_data.py   # Python validation script
@@ -159,7 +219,7 @@ prismt/
 ├── models/                 # Model architectures
 ├── training/               # Training utilities
 ├── utils/                  # Utility functions
-└── README.md              # This file
+└── README.md               # This file
 ```
 
 ## Documentation
