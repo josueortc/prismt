@@ -16,37 +16,41 @@ end
 
 %% Main UI (Suite2P-style panel layout)
 function createUIFigure()
+    % Layout constants: all positions fit within panels for consistent display
+    MAR = 20; W = 780; H = 1000;
     fig = uifigure('Name', 'PRISMT - Training Setup', ...
-        'Position', [80 30 760 920], ...
+        'Position', [80 30 W H], ...
         'Color', [0.96 0.96 0.98]);
     
     % === HEADER (professional bar) ===
-    headerPanel = uipanel(fig, 'Title', '', 'Position', [0 878 760 42], ...
+    headerPanel = uipanel(fig, 'Title', '', 'Position', [0 H-42 W 42], ...
         'BackgroundColor', [0.12 0.35 0.55], 'BorderType', 'none');
     uilabel(headerPanel, 'Text', 'PRISMT', 'Position', [20 8 140 24], ...
         'FontSize', 16, 'FontWeight', 'bold', 'FontColor', [1 1 1]);
     uilabel(headerPanel, 'Text', 'Transformer training | Optuna HPO', 'Position', [165 10 220 20], ...
         'FontSize', 10, 'FontColor', [0.85 0.9 1]);
-    helpBtn = uibutton(headerPanel, 'Text', 'Help', 'Position', [660 6 85 28], ...
+    helpBtn = uibutton(headerPanel, 'Text', 'Help', 'Position', [W-120 6 85 28], ...
         'BackgroundColor', [0.2 0.45 0.7], 'FontColor', [1 1 1], ...
         'ButtonPushedFcn', @(src,~) openHelp());
     
     % === PANEL 1: Data ===
-    p1 = uipanel(fig, 'Title', '1. Load Dataset', 'Position', [20 716 680 155], ...
+    p1w = W - 2*MAR; p1h = 155; p1y = H - 42 - 15 - p1h;
+    p1 = uipanel(fig, 'Title', '1. Load Dataset', 'Position', [MAR p1y p1w p1h], ...
         'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     
     uilabel(p1, 'Text', 'Dataset (.mat):', 'Position', [15 95 100 22]);
-    pathField = uieditfield(p1, 'text', 'Position', [120 92 420 28], ...
+    pathField = uieditfield(p1, 'text', 'Position', [120 92 p1w-280 28], ...
         'Value', '');
     summaryLabel = uilabel(p1, 'Text', 'No data loaded. Click Browse and Load.', ...
-        'Position', [15 45 655 35], 'FontColor', [0.4 0.4 0.4]);
-    uibutton(p1, 'Text', 'Browse', 'Position', [550 90 55 32], ...
+        'Position', [15 45 p1w-50 35], 'FontColor', [0.4 0.4 0.4]);
+    uibutton(p1, 'Text', 'Browse', 'Position', [p1w-145 90 55 32], ...
         'ButtonPushedFcn', @(src,~) browseForFile(pathField));
-    uibutton(p1, 'Text', 'Load', 'Position', [615 90 55 32], ...
+    uibutton(p1, 'Text', 'Load', 'Position', [p1w-80 90 55 32], ...
         'ButtonPushedFcn', @(src,~) validateDataset(pathField, summaryLabel));
     
     % === PANEL 2: Input & Tokenization ===
-    p2 = uipanel(fig, 'Title', '2. Input & Tokenization', 'Position', [20 530 680 160], ...
+    p2h = 160; p2y = p1y - 15 - p2h;
+    p2 = uipanel(fig, 'Title', '2. Input & Tokenization', 'Position', [MAR p2y p1w p2h], ...
         'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     
     uilabel(p2, 'Text', 'Data type:', 'Position', [15 95 80 22]);
@@ -60,10 +64,11 @@ function createUIFigure()
     
     uilabel(p2, 'Text', 'Tokenization:', 'Position', [15 50 90 22]);
     tokenInfoLabel = uilabel(p2, 'Text', 'Spatial: 1 token per region (computed after load)', ...
-        'Position', [110 45 565 30], 'FontColor', [0.4 0.4 0.4]);
+        'Position', [110 45 p1w-130 30], 'FontColor', [0.4 0.4 0.4]);
     
     % === PANEL 3: Conditions ===
-    p3 = uipanel(fig, 'Title', '3. Comparison Conditions', 'Position', [20 350 680 170], ...
+    p3h = 170; p3y = p2y - 15 - p3h;
+    p3 = uipanel(fig, 'Title', '3. Comparison Conditions', 'Position', [MAR p3y p1w p3h], ...
         'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     
     uilabel(p3, 'Text', 'Task:', 'Position', [15 115 50 22]);
@@ -87,100 +92,102 @@ function createUIFigure()
     seedEdit = uieditfield(p3, 'numeric', 'Position', [385 67 60 28], 'Value', 42);
     
     % === TRAINING MODE ===
-    uilabel(fig, 'Text', 'Mode:', 'Position', [20 340 50 22]);
-    modeDD = uidropdown(fig, 'Position', [75 337 180 28], ...
+    modeY = p3y - 45;
+    uilabel(fig, 'Text', 'Mode:', 'Position', [MAR modeY+3 50 22]);
+    modeDD = uidropdown(fig, 'Position', [MAR+55 modeY 180 28], ...
         'Items', {'Standard training', 'HPO (Optuna)'}, 'Value', 'Standard training');
-
-    uilabel(fig, 'Text', 'HPO trials:', 'Position', [270 340 75 22]);
-    hpoTrialsEdit = uieditfield(fig, 'numeric', 'Position', [350 337 55 28], 'Value', 30);
-    uilabel(fig, 'Text', 'Epochs/trial:', 'Position', [420 340 85 22]);
-    hpoEpochsEdit = uieditfield(fig, 'numeric', 'Position', [510 337 55 28], 'Value', 30);
+    uilabel(fig, 'Text', 'HPO trials:', 'Position', [MAR+250 modeY+3 75 22]);
+    hpoTrialsEdit = uieditfield(fig, 'numeric', 'Position', [MAR+330 modeY 55 28], 'Value', 30);
+    uilabel(fig, 'Text', 'Epochs/trial:', 'Position', [MAR+400 modeY+3 85 22]);
+    hpoEpochsEdit = uieditfield(fig, 'numeric', 'Position', [MAR+490 modeY 55 28], 'Value', 30);
 
     % === PANEL 4: Training ===
-    p4 = uipanel(fig, 'Title', '4. Training', 'Position', [20 170 420 170], ...
+    p4w = 420; p4h = 170; p4y = modeY - 15 - p4h;
+    p4 = uipanel(fig, 'Title', '4. Training', 'Position', [MAR p4y p4w p4h], ...
         'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     
-    uilabel(p4, 'Text', 'Batch:', 'Position', [15 140 50 22]);
-    batchEdit = uieditfield(p4, 'numeric', 'Position', [70 137 50 28], 'Value', 16);
-    uilabel(p4, 'Text', 'Epochs:', 'Position', [135 140 50 22]);
-    epochsEdit = uieditfield(p4, 'numeric', 'Position', [190 137 50 28], 'Value', 100);
-    uilabel(p4, 'Text', 'LR:', 'Position', [255 140 30 22]);
-    lrEdit = uieditfield(p4, 'text', 'Position', [290 137 60 28], 'Value', '5e-5');
-    uilabel(p4, 'Text', 'Weight decay:', 'Position', [360 140 85 22]);
-    weightDecayEdit = uieditfield(p4, 'text', 'Position', [450 137 55 28], 'Value', '1e-3');
+    uilabel(p4, 'Text', 'Batch:', 'Position', [15 140 45 22]);
+    batchEdit = uieditfield(p4, 'numeric', 'Position', [65 137 42 28], 'Value', 16);
+    uilabel(p4, 'Text', 'Epochs:', 'Position', [112 140 48 22]);
+    epochsEdit = uieditfield(p4, 'numeric', 'Position', [165 137 42 28], 'Value', 100);
+    uilabel(p4, 'Text', 'LR:', 'Position', [212 140 25 22]);
+    lrEdit = uieditfield(p4, 'text', 'Position', [242 137 52 28], 'Value', '5e-5');
+    uilabel(p4, 'Text', 'Weight decay:', 'Position', [299 140 72 22]);
+    weightDecayEdit = uieditfield(p4, 'text', 'Position', [376 137 40 28], 'Value', '1e-3');
     
-    uilabel(p4, 'Text', 'Val split:', 'Position', [15 95 60 22]);
-    valSplitEdit = uieditfield(p4, 'numeric', 'Position', [80 92 50 28], 'Value', 0.2, 'Limits', [0 1]);
-    uilabel(p4, 'Text', 'Save dir:', 'Position', [145 95 65 22]);
-    saveDirEdit = uieditfield(p4, 'text', 'Position', [215 92 150 28], 'Value', 'results');
+    uilabel(p4, 'Text', 'Val split:', 'Position', [15 95 55 22]);
+    valSplitEdit = uieditfield(p4, 'numeric', 'Position', [75 92 45 28], 'Value', 0.2, 'Limits', [0 1]);
+    uilabel(p4, 'Text', 'Save dir:', 'Position', [125 95 58 22]);
+    saveDirEdit = uieditfield(p4, 'text', 'Position', [188 92 p4w-268 28], 'Value', 'results');
     
-    uilabel(p4, 'Text', 'Output dir:', 'Position', [15 50 75 22]);
-    outputDirEdit = uieditfield(p4, 'text', 'Position', [95 47 310 28], ...
+    uilabel(p4, 'Text', 'Output dir:', 'Position', [15 50 70 22]);
+    outputDirEdit = uieditfield(p4, 'text', 'Position', [90 47 p4w-105 28], ...
         'Value', fullfile(fileparts(fileparts(mfilename('fullpath'))), 'generated_scripts'));
     
     % === PANEL 5: Model (hyperparameters) ===
-    p5 = uipanel(fig, 'Title', '5. Model', 'Position', [455 170 280 170], ...
+    p5w = 280; p5 = uipanel(fig, 'Title', '5. Model', 'Position', [MAR+p4w+15 p4y p5w p4h], ...
         'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     
-    uilabel(p5, 'Text', 'Hidden:', 'Position', [15 140 50 22]);
-    hiddenEdit = uieditfield(p5, 'numeric', 'Position', [70 137 50 28], 'Value', 128);
-    uilabel(p5, 'Text', 'Heads:', 'Position', [130 140 50 22]);
-    numHeadsEdit = uieditfield(p5, 'numeric', 'Position', [185 137 45 28], 'Value', 4);
-    uilabel(p5, 'Text', 'Layers:', 'Position', [240 140 50 22]);
-    numLayersEdit = uieditfield(p5, 'numeric', 'Position', [295 137 45 28], 'Value', 3);
+    uilabel(p5, 'Text', 'Hidden:', 'Position', [15 140 48 22]);
+    hiddenEdit = uieditfield(p5, 'numeric', 'Position', [68 137 42 28], 'Value', 128);
+    uilabel(p5, 'Text', 'Heads:', 'Position', [115 140 45 22]);
+    numHeadsEdit = uieditfield(p5, 'numeric', 'Position', [165 137 38 28], 'Value', 4);
+    uilabel(p5, 'Text', 'Layers:', 'Position', [208 140 45 22]);
+    numLayersEdit = uieditfield(p5, 'numeric', 'Position', [258 137 22 28], 'Value', 3);
     
-    uilabel(p5, 'Text', 'FF dim:', 'Position', [15 95 55 22]);
-    ffDimEdit = uieditfield(p5, 'numeric', 'Position', [75 92 55 28], 'Value', 256);
-    uilabel(p5, 'Text', 'Dropout:', 'Position', [140 95 55 22]);
-    dropoutEdit = uieditfield(p5, 'numeric', 'Position', [200 92 50 28], 'Value', 0.3, 'Limits', [0 1]);
+    uilabel(p5, 'Text', 'FF dim:', 'Position', [15 95 50 22]);
+    ffDimEdit = uieditfield(p5, 'numeric', 'Position', [70 92 48 28], 'Value', 256);
+    uilabel(p5, 'Text', 'Dropout:', 'Position', [123 95 52 22]);
+    dropoutEdit = uieditfield(p5, 'numeric', 'Position', [180 92 45 28], 'Value', 0.3, 'Limits', [0 1]);
     
-    uilabel(p5, 'Text', 'Scheduler:', 'Position', [15 50 65 22]);
-    schedulerDD = uidropdown(p5, 'Position', [85 47 120 28], ...
+    uilabel(p5, 'Text', 'Scheduler:', 'Position', [15 50 62 22]);
+    schedulerDD = uidropdown(p5, 'Position', [82 47 110 28], ...
         'Items', {'cosine_warmup', 'cosine', 'reduce_on_plateau', 'step'}, 'Value', 'cosine_warmup');
-    uilabel(p5, 'Text', 'Warmup:', 'Position', [215 50 55 22]);
-    warmupEdit = uieditfield(p5, 'numeric', 'Position', [275 47 40 28], 'Value', 5);
+    uilabel(p5, 'Text', 'Warmup:', 'Position', [197 50 50 22]);
+    warmupEdit = uieditfield(p5, 'numeric', 'Position', [252 47 28 28], 'Value', 5);
     
     % === PANEL 6: Cluster (SLURM) ===
-    p6 = uipanel(fig, 'Title', '6. Cluster (SLURM)', 'Position', [20 10 420 150], ...
+    p6h = 150; p6y = max(MAR, p4y - 15 - p6h);
+    p6 = uipanel(fig, 'Title', '6. Cluster (SLURM)', 'Position', [MAR p6y p4w p6h], ...
         'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     
-    uilabel(p6, 'Text', 'Partition:', 'Position', [15 110 50 22]);
-    partitionEdit = uieditfield(p6, 'text', 'Position', [68 107 55 28], 'Value', 'gpu');
-    uilabel(p6, 'Text', 'GPUs:', 'Position', [128 110 35 22]);
-    gpusEdit = uieditfield(p6, 'numeric', 'Position', [166 107 36 28], 'Value', 1);
-    uilabel(p6, 'Text', 'CPUs:', 'Position', [207 110 35 22]);
-    cpusEdit = uieditfield(p6, 'numeric', 'Position', [245 107 36 28], 'Value', 8);
-    uilabel(p6, 'Text', 'Mem:', 'Position', [286 110 35 22]);
-    memEdit = uieditfield(p6, 'numeric', 'Position', [324 107 36 28], 'Value', 32);
-    uilabel(p6, 'Text', 'Time(hr):', 'Position', [365 110 45 22]);
-    timeEdit = uieditfield(p6, 'numeric', 'Position', [413 107 36 28], 'Value', 24);
+    uilabel(p6, 'Text', 'Partition:', 'Position', [15 110 48 22]);
+    partitionEdit = uieditfield(p6, 'text', 'Position', [66 107 50 28], 'Value', 'gpu');
+    uilabel(p6, 'Text', 'GPUs:', 'Position', [121 110 32 22]);
+    gpusEdit = uieditfield(p6, 'numeric', 'Position', [156 107 32 28], 'Value', 1);
+    uilabel(p6, 'Text', 'CPUs:', 'Position', [193 110 32 22]);
+    cpusEdit = uieditfield(p6, 'numeric', 'Position', [228 107 32 28], 'Value', 8);
+    uilabel(p6, 'Text', 'Mem:', 'Position', [265 110 30 22]);
+    memEdit = uieditfield(p6, 'numeric', 'Position', [298 107 32 28], 'Value', 32);
+    uilabel(p6, 'Text', 'Time(hr):', 'Position', [335 110 42 22]);
+    timeEdit = uieditfield(p6, 'numeric', 'Position', [380 107 36 28], 'Value', 24);
     
-    uilabel(p6, 'Text', 'Data path on cluster:', 'Position', [15 70 130 22]);
-    clusterDataEdit = uieditfield(p6, 'text', 'Position', [150 67 265 28], 'Value', '');
-    uilabel(p6, 'Text', 'HPO out dir (cluster):', 'Position', [15 42 120 22]);
-    clusterOutEdit = uieditfield(p6, 'text', 'Position', [140 39 275 28], ...
+    uilabel(p6, 'Text', 'Data path on cluster:', 'Position', [15 70 120 22]);
+    clusterDataEdit = uieditfield(p6, 'text', 'Position', [140 67 p4w-155 28], 'Value', '');
+    uilabel(p6, 'Text', 'HPO out dir (cluster):', 'Position', [15 42 115 22]);
+    clusterOutEdit = uieditfield(p6, 'text', 'Position', [135 39 p4w-150 28], ...
         'Value', '');
     
-    uilabel(p6, 'Text', 'Setup (conda activate, etc.):', 'Position', [15 12 160 22]);
-    setupEdit = uieditfield(p6, 'text', 'Position', [15 2 400 22], 'Value', '');
+    uilabel(p6, 'Text', 'Setup (conda activate, etc.):', 'Position', [15 12 155 22]);
+    setupEdit = uieditfield(p6, 'text', 'Position', [15 2 p4w-30 22], 'Value', '');
     
     % === ACTION PANEL (right side) ===
-    actionPanel = uipanel(fig, 'Title', 'Run', 'Position', [455 10 280 150], ...
+    actionPanel = uipanel(fig, 'Title', 'Run', 'Position', [MAR+p4w+15 p6y p5w p6h], ...
         'BackgroundColor', [0.95 0.97 1], 'FontWeight', 'bold');
     
     runBtn = uibutton(actionPanel, 'Text', 'Run Training Now', ...
-        'Position', [15 85 250 40], 'BackgroundColor', [0.2 0.55 0.35], ...
+        'Position', [15 85 p5w-30 40], 'BackgroundColor', [0.2 0.55 0.35], ...
         'FontColor', [1 1 1], 'FontSize', 12, 'FontWeight', 'bold', ...
         'ButtonPushedFcn', @(src,~) runTraining(src.Parent.Parent));
     
     genBtn = uibutton(actionPanel, 'Text', 'Generate Cluster Script', ...
-        'Position', [15 35 250 38], 'BackgroundColor', [0.25 0.5 0.8], ...
+        'Position', [15 35 p5w-30 38], 'BackgroundColor', [0.25 0.5 0.8], ...
         'FontColor', [1 1 1], 'FontWeight', 'bold', ...
         'ButtonPushedFcn', @(src,~) generateScript(src.Parent.Parent));
     
     % === STATUS BAR (bottom, Suite2P-style) ===
     statusLabel = uilabel(fig, 'Text', 'Ready. Load a dataset to begin.', ...
-        'Position', [20 2 720 22], 'FontColor', [0.4 0.4 0.4], 'FontSize', 10);
+        'Position', [MAR 0 W-2*MAR 20], 'FontColor', [0.4 0.4 0.4], 'FontSize', 10);
     
     % Store handles
     fig.UserData = struct(...
