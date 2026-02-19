@@ -9,6 +9,7 @@ on standardized widefield calcium imaging data, supporting both:
 """
 
 import argparse
+import json
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -16,13 +17,19 @@ import time
 from pathlib import Path
 import sys
 import logging
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Dict, Any
 
 # Add project root to path
 project_root = Path(__file__).parent
 sys.path.append(str(project_root))
 
-from data.data_loader import WidefieldDataset, TaskDefinition, WidefieldTrialDataset
+from data.data_loader import (
+    WidefieldDataset,
+    TaskDefinition,
+    WidefieldTrialDataset,
+    create_task_definition_from_flexible,
+    get_unique_column_values,
+)
 from models.transformer import create_model
 from training.trainer import Trainer, run_attention_and_diagnosis
 from utils.helpers import setup_logging, set_seed, get_device, format_time
@@ -85,34 +92,154 @@ def create_data_loaders_unified(
     batch_size: int = 32,
     num_workers: int = 4,
     phase1: Optional[str] = None,
-    phase2: Optional[str] = None
+    phase2: Optional[str] = None,
+    region_pool: int = 1,
+    time_pool: int = 1,
+    task_mode: str = 'classification',
+    target_column: Optional[str] = None,
+    target_values: Optional[List[Any]] = None,
+    filters: Optional[Dict[str, List[Any]]] = None,
 ) -> Tuple[DataLoader, DataLoader, dict]:
     """
     Create data loaders for unified training pipeline.
+    
+    Supports legacy (task_type/phase1/phase2) and flexible (target_column/target_values/filters) modes.
     
     Args:
         dataset: WidefieldDataset instance
         train_indices: Training dataset indices
         val_indices: Validation dataset indices
-        task_type: 'genotype' or 'phase'
+        task_type: 'genotype' or 'phase' (legacy)
         data_type: 'dff' or 'zscore'
         batch_size: Batch size
         num_workers: Number of data loader workers
-        phase1: First phase for phase classification (if task_type='phase')
-        phase2: Second phase for phase classification (if task_type='phase')
+        phase1: First phase for phase classification (legacy)
+        phase2: Second phase for phase classification (legacy)
+        region_pool: Pool factor for brain areas (1=none, 2=avg pairs)
+        time_pool: Pool factor for timepoints (1=none, 2=avg pairs)
+        task_mode: 'classification' or 'regression'
+        target_column: Column to predict (flexible mode)
+        target_values: Values for classification (flexible mode)
+        filters: Column filters, e.g. {'stim': [1], 'response': [0,1]} (flexible mode)
     
     Returns:
         Tuple of (train_loader, val_loader, normalization_stats)
     """
+    if target_column is not None:
+        return create_flexible_data_loaders(
+            dataset, train_indices, val_indices, data_type, batch_size, num_workers,
+            task_mode=task_mode, target_column=target_column,
+            target_values=target_values, filters=filters,
+            region_pool=region_pool, time_pool=time_pool
+        )
     if task_type == 'genotype':
         return create_genotype_data_loaders(
-            dataset, train_indices, val_indices, data_type, batch_size, num_workers
-        )
-    else:
-        return create_phase_data_loaders(
             dataset, train_indices, val_indices, data_type, batch_size, num_workers,
-            phase1, phase2
+            region_pool=region_pool, time_pool=time_pool
         )
+    return create_phase_data_loaders(
+        dataset, train_indices, val_indices, data_type, batch_size, num_workers,
+        phase1, phase2, region_pool=region_pool, time_pool=time_pool
+    )
+
+
+def create_flexible_data_loaders(
+    dataset: WidefieldDataset,
+    train_indices: List[int],
+    val_indices: List[int],
+    data_type: str = 'dff',
+    batch_size: int = 32,
+    num_workers: int = 4,
+    task_mode: str = 'classification',
+    target_column: str = 'phase',
+    target_values: Optional[List[Any]] = None,
+    filters: Optional[Dict[str, List[Any]]] = None,
+    region_pool: int = 1,
+    time_pool: int = 1,
+) -> Tuple[DataLoader, DataLoader, dict]:
+    """Create data loaders with dataset-agnostic, column-based condition selection."""
+    filters = filters or {}
+    # Detect stim/response from data if not in filters
+    all_stim = set()
+    all_response = set()
+    for idx in list(train_indices) + list(val_indices):
+        if idx < dataset.data_table.shape[0]:
+            for col, default in [('stim', 2), ('response', 3)]:
+                d = dataset.data_table[idx, default]
+                if d is not None and hasattr(d, '__iter__') and not isinstance(d, str):
+                    try:
+                        u = np.unique(d)
+                        u = u[~np.isnan(u)]
+                        if len(u) > 0:
+                            (all_stim if col == 'stim' else all_response).update(u.astype(int))
+                    except Exception:
+                        pass
+    if 'stim' not in filters:
+        filters = dict(filters, stim=sorted(all_stim) if all_stim else [1])
+    if 'response' not in filters:
+        filters = dict(filters, response=sorted(all_response) if all_response else [0, 1])
+    # Multiclass: discover all unique values in target column when target_values is empty
+    if task_mode == 'classification' and (not target_values or len(target_values) == 0):
+        if target_column in ('phase', 'mouse', 'stim', 'response'):
+            all_indices = list(train_indices) + list(val_indices)
+            target_values = get_unique_column_values(dataset, all_indices, target_column)
+            logger.info(f"Multiclass: using all {len(target_values)} values from {target_column}: {target_values}")
+    task_def = create_task_definition_from_flexible(
+        target_column=target_column,
+        target_values=target_values,
+        filters=filters,
+        task_mode=task_mode
+    )
+    return_target = target_column if (task_mode == 'regression' and target_column in ('stim', 'response')) else None
+    result = task_def.filter_trials(dataset, train_indices, data_type, return_target_column=return_target)
+    if return_target:
+        train_neural, train_labels, train_idx, train_mice, train_targets = result
+        train_labels = train_targets  # Use raw values for regression
+    else:
+        train_neural, train_labels, train_idx, train_mice = result
+    result = task_def.filter_trials(dataset, val_indices, data_type, return_target_column=return_target)
+    if return_target:
+        val_neural, _, val_idx, val_mice, val_targets = result
+        val_labels = val_targets
+    else:
+        val_neural, val_labels, val_idx, val_mice = result
+    if target_column == 'mouse':
+        if target_values and len(target_values) > 2:
+            # Multiclass: map mouse_id to index in target_values
+            tv_set = {str(v).strip().lower(): i for i, v in enumerate(target_values)}
+            train_labels = np.array([
+                tv_set.get(str(m).strip().lower(), 0) for m in train_mice
+            ])
+            val_labels = np.array([
+                tv_set.get(str(m).strip().lower(), 0) for m in val_mice
+            ])
+        else:
+            # Binary: WT vs Mut
+            train_labels = np.array([
+                0 if str(m).lower().startswith(('wt_', 'wild')) else 1
+                for m in train_mice
+            ])
+            val_labels = np.array([
+                0 if str(m).lower().startswith(('wt_', 'wild')) else 1
+                for m in val_mice
+            ])
+    logger.info(f"Flexible task: target={target_column} mode={task_mode} filters={filters}")
+    logger.info(f"Train: {len(train_labels)} trials, Val: {len(val_labels)} trials")
+    if task_mode == 'classification':
+        logger.info(f"Train distribution: {np.bincount(train_labels.astype(int))}")
+        logger.info(f"Val distribution: {np.bincount(val_labels.astype(int))}")
+    norm_stats = {'normalization_type': 'scale_20'}
+    train_ds = WidefieldTrialDataset(
+        neural_data=train_neural, labels=train_labels, normalize_stats=norm_stats,
+        mouse_ids=train_mice, region_pool=region_pool, time_pool=time_pool
+    )
+    val_ds = WidefieldTrialDataset(
+        neural_data=val_neural, labels=val_labels, normalize_stats=norm_stats,
+        mouse_ids=val_mice, region_pool=region_pool, time_pool=time_pool
+    )
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
+    return train_loader, val_loader, norm_stats
 
 
 def create_genotype_data_loaders(
@@ -121,7 +248,9 @@ def create_genotype_data_loaders(
     val_indices: List[int],
     data_type: str = 'dff',
     batch_size: int = 32,
-    num_workers: int = 4
+    num_workers: int = 4,
+    region_pool: int = 1,
+    time_pool: int = 1,
 ) -> Tuple[DataLoader, DataLoader, dict]:
     """Create data loaders for genotype classification (CDKL5)."""
     # Detect available stim and response values
@@ -204,13 +333,17 @@ def create_genotype_data_loaders(
         neural_data=train_neural_data,
         labels=train_genotype_labels,
         normalize_stats=normalization_stats,
-        mouse_ids=train_mouse_ids
+        mouse_ids=train_mouse_ids,
+        region_pool=region_pool,
+        time_pool=time_pool,
     )
     val_dataset = WidefieldTrialDataset(
         neural_data=val_neural_data,
         labels=val_genotype_labels,
         normalize_stats=normalization_stats,
-        mouse_ids=val_mouse_ids
+        mouse_ids=val_mouse_ids,
+        region_pool=region_pool,
+        time_pool=time_pool,
     )
     
     # Create data loaders
@@ -240,7 +373,9 @@ def create_phase_data_loaders(
     batch_size: int = 32,
     num_workers: int = 4,
     phase1: Optional[str] = None,
-    phase2: Optional[str] = None
+    phase2: Optional[str] = None,
+    region_pool: int = 1,
+    time_pool: int = 1,
 ) -> Tuple[DataLoader, DataLoader, dict]:
     """Create data loaders for phase classification (widefield)."""
     if phase1 is None or phase2 is None:
@@ -301,13 +436,17 @@ def create_phase_data_loaders(
         neural_data=train_neural_data,
         labels=train_labels,
         normalize_stats=normalization_stats,
-        mouse_ids=train_mouse_ids
+        mouse_ids=train_mouse_ids,
+        region_pool=region_pool,
+        time_pool=time_pool,
     )
     val_dataset = WidefieldTrialDataset(
         neural_data=val_neural_data,
         labels=val_labels,
         normalize_stats=normalization_stats,
-        mouse_ids=val_mouse_ids
+        mouse_ids=val_mouse_ids,
+        region_pool=region_pool,
+        time_pool=time_pool,
     )
     
     # Create data loaders
@@ -401,8 +540,20 @@ def parse_arguments():
                         help='Path to standardized .mat data file')
     parser.add_argument('--data_type', type=str, default='dff', choices=['dff', 'zscore'],
                         help='Type of neural data to use')
+    parser.add_argument('--region_pool', type=int, default=1,
+                        help='Pool factor for brain regions (1=none, 2=avg pairs, etc.)')
+    parser.add_argument('--time_pool', type=int, default=1,
+                        help='Pool factor for timepoints (1=none, 2=avg pairs, etc.)')
     parser.add_argument('--task_type', type=str, default='auto', choices=['auto', 'genotype', 'phase'],
                         help='Task type: auto (detect), genotype (CDKL5), or phase (widefield)')
+    parser.add_argument('--task_mode', type=str, default='classification', choices=['classification', 'regression'],
+                        help='Task mode: classification or regression')
+    parser.add_argument('--target_column', type=str, default=None,
+                        help='Column to predict (phase, mouse, stim, response). Enables flexible mode.')
+    parser.add_argument('--target_values', type=str, default=None,
+                        help='Comma-separated values for classification (e.g. early,late)')
+    parser.add_argument('--filters', type=str, default=None,
+                        help='JSON filters, e.g. \'{"stim":[1],"response":[0,1]}\'')
     parser.add_argument('--phase1', type=str, default=None,
                         help='First phase for phase classification (e.g., "early")')
     parser.add_argument('--phase2', type=str, default=None,
@@ -493,15 +644,29 @@ def main():
     else:
         task_type = args.task_type
     
-    # Validate phase arguments for phase classification
-    if task_type == 'phase':
+    # Flexible mode: target_column enables dataset-agnostic condition selection
+    target_column = args.target_column
+    target_values = None
+    filters = None
+    if args.target_values:
+        target_values = [v.strip() for v in args.target_values.split(',') if v.strip()]
+    if args.filters:
+        try:
+            filters = json.loads(args.filters)
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid --filters JSON: {e}")
+            sys.exit(1)
+    
+    # Validate phase arguments for phase classification (legacy)
+    if task_type == 'phase' and target_column is None:
         if args.phase1 is None or args.phase2 is None:
             logger.error("phase1 and phase2 must be specified for phase classification")
             sys.exit(1)
     
-    # Create train/val split
+    # Create train/val split (use phase grouping when target_column set - group by mouse)
+    split_task = 'phase' if target_column else task_type
     train_indices, val_indices = create_train_val_split(
-        dataset, task_type, args.val_split, args.seed
+        dataset, split_task, args.val_split, args.seed
     )
     
     # Create data loaders
@@ -509,19 +674,32 @@ def main():
     train_loader, val_loader, normalization_stats = create_data_loaders_unified(
         dataset, train_indices, val_indices, task_type, args.data_type,
         args.batch_size, num_workers=4,
-        phase1=args.phase1, phase2=args.phase2
+        phase1=args.phase1, phase2=args.phase2,
+        region_pool=args.region_pool, time_pool=args.time_pool,
+        task_mode=args.task_mode, target_column=target_column,
+        target_values=target_values, filters=filters
     )
     
-    # Get sample data to determine dimensions
-    sample_data, _ = next(iter(train_loader))
-    sample_data = sample_data[0]  # Get first sample
-    n_brain_areas = sample_data.shape[1]
+    # Get sample data to determine dimensions (batch shape: batch, time_points, n_brain_areas)
+    sample_batch, _ = next(iter(train_loader))
+    sample_data = sample_batch[0] if isinstance(sample_batch, (tuple, list)) else sample_batch
+    sample_data = sample_data[0]  # Get first sample: (time_points, n_brain_areas)
     time_points = sample_data.shape[0]
+    n_brain_areas = sample_data.shape[1]
     
     logger.info(f"Data dimensions: {n_brain_areas} brain areas, {time_points} time points")
     
     # Create model
     logger.info("Creating model...")
+    if args.task_mode == 'classification':
+        seen_labels = set()
+        for batch in train_loader:
+            lb = batch[1] if isinstance(batch, (tuple, list)) else batch[1]
+            seen_labels.update(lb.cpu().numpy().flatten().tolist())
+        num_classes = max(2, len(seen_labels))
+        logger.info(f"Classification: {num_classes} classes")
+    else:
+        num_classes = 1
     model = create_model(
         n_brain_areas=n_brain_areas,
         time_points=time_points,
@@ -529,8 +707,9 @@ def main():
         num_heads=args.num_heads,
         num_layers=args.num_layers,
         ff_dim=args.ff_dim,
-        num_classes=2,
+        num_classes=num_classes,
         dropout=args.dropout,
+        task_mode=args.task_mode,
         device=device
     )
     

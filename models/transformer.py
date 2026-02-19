@@ -225,7 +225,8 @@ class TransformerBlock(nn.Module):
 
 class WidefieldTransformer(nn.Module):
     """
-    Transformer model for widefield calcium imaging classification.
+    Transformer model for widefield calcium imaging.
+    Supports both classification and regression.
     """
     
     def __init__(
@@ -237,7 +238,8 @@ class WidefieldTransformer(nn.Module):
         num_layers: int = 6,
         ff_dim: int = 1024,
         num_classes: int = 2,
-        dropout: float = 0.1
+        dropout: float = 0.1,
+        task_mode: str = 'classification'
     ):
         """
         Initialize the transformer model.
@@ -249,8 +251,9 @@ class WidefieldTransformer(nn.Module):
             num_heads: Number of attention heads
             num_layers: Number of transformer layers
             ff_dim: Feed-forward dimension
-            num_classes: Number of output classes
+            num_classes: Number of output classes (classification only)
             dropout: Dropout probability
+            task_mode: 'classification' or 'regression'
         """
         super().__init__()
         
@@ -262,6 +265,7 @@ class WidefieldTransformer(nn.Module):
         self.ff_dim = ff_dim
         self.num_classes = num_classes
         self.dropout_prob = dropout
+        self.task_mode = task_mode
         
         # Token embedding projects time series to hidden dimension
         self.token_embedding = TokenEmbedding(time_points, hidden_dim)
@@ -279,8 +283,11 @@ class WidefieldTransformer(nn.Module):
             for _ in range(num_layers)
         ])
         
-        # Classification head
-        self.classifier = nn.Linear(hidden_dim, num_classes)
+        # Output head: classification or regression
+        if task_mode == 'regression':
+            self.classifier = nn.Linear(hidden_dim, 1)
+        else:
+            self.classifier = nn.Linear(hidden_dim, num_classes)
         
         # Dropout
         self.dropout_layer = nn.Dropout(dropout)
@@ -339,13 +346,15 @@ class WidefieldTransformer(nn.Module):
             tokens, attention_weights = layer(tokens)
             attention_weights_list.append(attention_weights)
         
-        # Extract CLS token for classification
+        # Extract CLS token
         cls_output = tokens[:, 0, :]  # (batch_size, hidden_dim)
         
-        # Apply classification head
-        logits = self.classifier(cls_output)  # (batch_size, num_classes)
+        # Apply output head
+        out = self.classifier(cls_output)  # (batch_size, num_classes) or (batch_size, 1)
+        if self.task_mode == 'regression':
+            out = out.squeeze(-1)  # (batch_size,)
         
-        return logits, attention_weights_list
+        return out, attention_weights_list
     
     def get_attention_rollout(self, attention_weights_list: List[torch.Tensor]) -> torch.Tensor:
         """
@@ -399,6 +408,7 @@ def create_model(
     ff_dim: int = 1024,
     num_classes: int = 2,
     dropout: float = 0.1,
+    task_mode: str = 'classification',
     device: torch.device = torch.device('cpu')
 ) -> WidefieldTransformer:
     """
@@ -411,8 +421,9 @@ def create_model(
         num_heads: Number of attention heads
         num_layers: Number of transformer layers
         ff_dim: Feed-forward dimension
-        num_classes: Number of output classes
+        num_classes: Number of output classes (classification only)
         dropout: Dropout probability
+        task_mode: 'classification' or 'regression'
         device: Device to place the model on
         
     Returns:
@@ -426,7 +437,8 @@ def create_model(
         num_layers=num_layers,
         ff_dim=ff_dim,
         num_classes=num_classes,
-        dropout=dropout
+        dropout=dropout,
+        task_mode=task_mode
     )
     
     model = model.to(device)

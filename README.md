@@ -240,7 +240,8 @@ prismt/
 
 ## Documentation
 
-**📖 [GitHub Wiki](https://github.com/josueortc/prismt/wiki)** - Comprehensive guide on data standardization:
+**📖 [GitHub Wiki](https://github.com/josueortc/prismt/wiki)** - Comprehensive guide:
+- [MATLAB GUI Tutorial](docs/MATLAB_GUI_Tutorial.md) - Frame-by-frame GUI walkthrough with screenshots
 - Data standardization overview
 - Preparing widefield data
 - Preparing CDKL5 data

@@ -14,7 +14,8 @@ function [ok, info, errMsg] = validate_prismt_mat(pathStr)
 
     ok = false;
     info = struct('n_datasets', 0, 'n_trials', 0, 'n_timepoints', 0, 'n_regions', 0, ...
-        'phases', {{}}, 'stim_values', [], 'response_values', []);
+        'phases', {{}}, 'stim_values', [], 'response_values', [], ...
+        'column_names', {{}}, 'column_values', struct());
     errMsg = '';
 
     % 1. Path checks
@@ -141,6 +142,8 @@ function [ok, info, errMsg] = validate_prismt_mat(pathStr)
         info.phases = extract_unique_values(pd, 'phase');
         info.stim_values = extract_unique_numeric(pd, 'stim');
         info.response_values = extract_unique_numeric(pd, 'response');
+        % Dataset-agnostic: discover metadata columns and their unique values
+        [info.column_names, info.column_values] = discover_columns_processed(pd);
         ok = true;
         return;
     end
@@ -220,7 +223,48 @@ function [ok, info, errMsg] = validate_prismt_mat(pathStr)
     info.phases = extract_unique_values_table(T, 'phase');
     info.stim_values = extract_unique_numeric_table(T, 'stim');
     info.response_values = extract_unique_numeric_table(T, 'response');
+    [info.column_names, info.column_values] = discover_columns_table(T);
     ok = true;
+end
+
+function [colNames, colVals] = discover_columns_processed(pd)
+    % Discover metadata columns from processed_data (exclude dff, zscore)
+    metaCols = {'stim', 'response', 'phase', 'mouse'};
+    colNames = {};
+    colVals = struct();
+    fn = fieldnames(pd);
+    dsFn = fn(~cellfun(@isempty, strfind(fn, 'dataset_')));
+    if isempty(dsFn), return; end
+    ds1 = pd.(dsFn{1});
+    for i = 1:length(metaCols)
+        c = metaCols{i};
+        if ~isfield(ds1, c), continue; end
+        colNames{end+1} = c;
+        if ismember(c, {'stim', 'response'})
+            colVals.(c) = extract_unique_numeric(pd, c);
+        else
+            v = extract_unique_values(pd, c);
+            colVals.(c) = v;
+        end
+    end
+end
+
+function [colNames, colVals] = discover_columns_table(T)
+    % Discover metadata columns from table T (exclude dff, zscore)
+    metaCols = {'stim', 'response', 'phase', 'mouse'};
+    haveCols = T.Properties.VariableNames;
+    colNames = {};
+    colVals = struct();
+    for i = 1:length(metaCols)
+        c = metaCols{i};
+        if ~ismember(c, haveCols), continue; end
+        colNames{end+1} = c;
+        if ismember(c, {'stim', 'response'})
+            colVals.(c) = extract_unique_numeric_table(T, c);
+        else
+            colVals.(c) = extract_unique_values_table(T, c);
+        end
+    end
 end
 
 function vals = extract_unique_values(pd, fieldName)

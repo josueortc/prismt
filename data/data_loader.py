@@ -1281,8 +1281,9 @@ class TaskDefinition:
         self, 
         dataset: WidefieldDataset, 
         dataset_indices: List[int],
-        data_type: str = 'dff'
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]:
+        data_type: str = 'dff',
+        return_target_column: Optional[str] = None
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[str], Optional[np.ndarray]]:
         """
         Filter trials based on task definition and combine datasets.
         
@@ -1293,14 +1294,17 @@ class TaskDefinition:
             dataset: WidefieldDataset instance
             dataset_indices: Indices of datasets (rows) to consider
             data_type: Type of data to extract ('dff' or 'zscore')
+            return_target_column: If 'stim' or 'response', also return raw values for regression
             
         Returns:
             Tuple of (combined_neural_data, combined_labels, combined_trial_indices, mouse_ids)
+            or 5-tuple with target_values as last element when return_target_column is set
         """
         combined_neural_data = []
         combined_labels = []
         combined_trial_indices = []
         combined_mouse_ids = []
+        combined_target_values = [] if return_target_column in ('stim', 'response') else None
         
         # Track NaN filtering statistics
         total_candidate_trials = 0
@@ -1541,9 +1545,13 @@ class TaskDefinition:
                             logger.warning(f"Phase '{trial_phase_str}' not found in target phases {self.phases} for trial {trial_idx} in dataset {dataset_idx}, skipping")
                             continue
                     
+                    target_val = float(stim_val) if return_target_column == 'stim' else (
+                        float(response_val) if return_target_column == 'response' else None)
                     dataset_valid_trials.append(trial_idx)
                     dataset_labels.append(label)
                     dataset_neural_data.append(trial_neural_data)
+                    if combined_target_values is not None and target_val is not None:
+                        combined_target_values.append(target_val)
             
             # Add this dataset's valid trials to the combined data
             if dataset_valid_trials:
@@ -1728,7 +1736,97 @@ class TaskDefinition:
         logger.info(f"  Combined data shape: {combined_neural_data.shape}")
         logger.info(f"  Unique mice: {len(set(combined_mouse_ids))}")
         
+        if combined_target_values is not None:
+            return (combined_neural_data, combined_labels, np.array(combined_trial_indices),
+                    combined_mouse_ids, np.array(combined_target_values, dtype=np.float32))
         return combined_neural_data, combined_labels, np.array(combined_trial_indices), combined_mouse_ids
+
+
+# Column indices for data_table (assumes .mat structure: dff, zscore, stim, response, phase, mouse)
+COLUMN_INDEX = {'dff': 0, 'zscore': 1, 'stim': 2, 'response': 3, 'phase': 4, 'mouse': 5}
+
+
+def get_unique_column_values(
+    dataset: WidefieldDataset,
+    dataset_indices: List[int],
+    column_name: str
+) -> List[Any]:
+    """Get unique values from a column across the given dataset indices."""
+    if column_name not in COLUMN_INDEX:
+        return []
+    col_idx = COLUMN_INDEX[column_name]
+    seen = set()
+    for idx in dataset_indices:
+        if idx >= dataset.data_table.shape[0]:
+            continue
+        data = dataset.data_table[idx, col_idx]
+        if data is None:
+            continue
+        try:
+            if hasattr(data, '__iter__') and not isinstance(data, str):
+                flat = np.asarray(data).flatten()
+                for v in flat:
+                    v = v.item() if hasattr(v, 'item') else v
+                    if isinstance(v, (int, float)) and np.isnan(v):
+                        continue
+                    seen.add(str(v).strip().lower() if isinstance(v, str) else v)
+            else:
+                v = data.item() if hasattr(data, 'item') else data
+                if not (isinstance(v, (int, float)) and np.isnan(v)):
+                    seen.add(str(v).strip().lower() if isinstance(v, str) else v)
+        except (TypeError, ValueError):
+            pass
+    if column_name in ('stim', 'response'):
+        out = []
+        for x in seen:
+            try:
+                out.append(int(float(x)) if str(x).replace('.', '').isdigit() else x)
+            except (ValueError, TypeError):
+                out.append(x)
+        return sorted(out)
+    return sorted(list(seen))
+
+
+def create_task_definition_from_flexible(
+    target_column: str,
+    target_values: Optional[List] = None,
+    filters: Optional[Dict[str, List]] = None,
+    task_mode: str = 'classification'
+) -> TaskDefinition:
+    """
+    Create TaskDefinition from flexible, dataset-agnostic parameters.
+    
+    Maps to legacy TaskDefinition for backward compatibility.
+    For genotype (target_column='mouse'), uses phases=['all'] and labels come from mouse IDs.
+    For phase (target_column='phase'), uses target_values as phases.
+    
+    Args:
+        target_column: Column to predict ('phase', 'mouse', 'stim', 'response')
+        target_values: For classification, values to include (e.g. ['early','late'])
+        filters: Dict of column -> values to include, e.g. {'stim': [1], 'response': [0,1]}
+        task_mode: 'classification' or 'regression'
+    
+    Returns:
+        TaskDefinition configured for the given params
+    """
+    filters = filters or {}
+    stim_values = filters.get('stim', [1])
+    response_values = filters.get('response', [0, 1])
+    if target_column == 'mouse':
+        phases = ['all']
+    elif target_column == 'phase':
+        if target_values:
+            phases = [str(v).strip().lower() for v in target_values]
+        else:
+            phases = filters.get('phase', ['early', 'mid', 'late'])
+    else:
+        phases = filters.get('phase', ['early', 'late'])
+    return TaskDefinition(
+        stim_values=stim_values,
+        response_values=response_values,
+        phases=phases,
+        task_name=f"{target_column}_{task_mode}"
+    )
 
 
 class WidefieldTrialDataset(Dataset):
@@ -1741,7 +1839,9 @@ class WidefieldTrialDataset(Dataset):
         neural_data: np.ndarray,
         labels: np.ndarray,
         normalize_stats: Optional[Dict[str, np.ndarray]] = None,
-        mouse_ids: Optional[np.ndarray] = None
+        mouse_ids: Optional[np.ndarray] = None,
+        region_pool: int = 1,
+        time_pool: int = 1,
     ):
         """
         Initialize trial dataset with pre-filtered and combined data.
@@ -1751,11 +1851,15 @@ class WidefieldTrialDataset(Dataset):
             labels: Labels array (n_trials,)
             normalize_stats: Dict with 'mean' and 'std' for normalization
             mouse_ids: Optional array of mouse IDs (n_trials,)
+            region_pool: Pool factor for brain areas (1=none, 2=avg pairs, etc.)
+            time_pool: Pool factor for timepoints (1=none, 2=avg pairs, etc.)
         """
         self.neural_data = neural_data
         self.labels = labels
         self.normalize_stats = normalize_stats
         self.mouse_ids = mouse_ids if mouse_ids is not None else np.array([None] * len(labels))
+        self.region_pool = max(1, int(region_pool))
+        self.time_pool = max(1, int(time_pool))
         
         if len(neural_data) != len(labels):
             raise ValueError(f"Neural data and labels must have same length: {len(neural_data)} vs {len(labels)}")
@@ -1831,54 +1935,37 @@ class WidefieldTrialDataset(Dataset):
         # but this provides an additional safety measure consistent with reference code
         trial_data = np.nan_to_num(trial_data, nan=0.0)
         
-        # Apply brain area averaging (N/2 brain areas)
-        # Following reference: x = (x[:, 0::2] + x[:, 1::2]) / 2
-        # After transpose check, trial_data should be (timepoints, brain_areas)
+        # Apply region and time pooling (configurable)
+        # trial_data: (timepoints, brain_areas)
         n_timepoints = trial_data.shape[0]
         n_areas = trial_data.shape[1]
         
-        # Log shape info for first trial
-        if idx == 0:
-            logger.info(f"Final shape: trial_data.shape={trial_data.shape}, n_timepoints={n_timepoints}, n_areas={n_areas}")
+        if self.region_pool > 1 and n_areas >= self.region_pool:
+            n_pooled = n_areas // self.region_pool
+            pooled_areas = []
+            for i in range(n_pooled):
+                start = i * self.region_pool
+                end = start + self.region_pool
+                pooled_areas.append(trial_data[:, start:end].mean(axis=1))
+            trial_data = np.stack(pooled_areas, axis=1)  # (timepoints, n_pooled)
+            n_areas = trial_data.shape[1]
+            if idx == 0:
+                logger.info(f"Trial {idx}: Region pool {self.region_pool}: {n_areas * self.region_pool} -> {n_areas} areas")
         
-        # Only apply averaging if we haven't already done it
-        # For CDKL5 data: average 56 brain areas to 28 by pairing (0,1), (2,3), ..., (54,55)
-        if n_areas == 56:
-            # Average every pair of adjacent brain areas: (0,1), (2,3), ..., (54,55)
-            # This reduces 56 brain areas to 28 averaged areas
-            averaged_areas = []
-            for i in range(0, 56, 2):  # Exactly 28 pairs
-                avg_area = (trial_data[:, i] + trial_data[:, i + 1]) / 2
-                averaged_areas.append(avg_area)
-            
-            # We should always have exactly 28 averaged areas from 56 original areas
-            assert len(averaged_areas) == 28, f"Expected 28 averaged areas, got {len(averaged_areas)}"
-            
-            trial_data = np.stack(averaged_areas, axis=1)  # (time_points, 28)
+        if self.time_pool > 1 and n_timepoints >= self.time_pool:
+            n_pooled_t = n_timepoints // self.time_pool
+            pooled_time = []
+            for i in range(n_pooled_t):
+                start = i * self.time_pool
+                end = start + self.time_pool
+                pooled_time.append(trial_data[start:end, :].mean(axis=0))
+            trial_data = np.stack(pooled_time, axis=0)  # (n_pooled_t, n_areas)
+            n_timepoints = trial_data.shape[0]
             if idx == 0:
-                logger.info(f"Trial {idx}: Averaged 56 brain areas to 28 (CDKL5 format)")
-        # For standard widefield data: average 82 brain areas to 41
-        elif n_areas == 82:
-            # Average every pair of adjacent brain areas: (0,1), (2,3), ..., (80,81)
-            # This matches reference preprocessing: (x[:, 0::2] + x[:, 1::2]) / 2
-            averaged_areas = []
-            for i in range(0, 82, 2):  # Exactly 41 pairs
-                avg_area = (trial_data[:, i] + trial_data[:, i + 1]) / 2
-                averaged_areas.append(avg_area)
-            
-            # We should always have exactly 41 averaged areas from 82 original areas
-            assert len(averaged_areas) == 41, f"Expected 41 averaged areas, got {len(averaged_areas)}"
-            
-            trial_data = np.stack(averaged_areas, axis=1)  # (time_points, 41)
-        elif n_areas == 41 or n_areas == 28:
-            # Already averaged, no need to do anything
-            if idx == 0:
-                logger.info(f"Trial {idx}: Already averaged ({n_areas} brain areas)")
-            pass
-        else:
-            # For other brain area counts, use as-is
-            if idx == 0:
-                logger.info(f"Trial {idx}: Using {n_areas} brain areas directly (no averaging applied)")
+                logger.info(f"Trial {idx}: Time pool {self.time_pool}: {n_timepoints * self.time_pool} -> {n_timepoints} timepoints")
+        
+        if idx == 0:
+            logger.info(f"Final shape: trial_data.shape={trial_data.shape}, timepoints={n_timepoints}, regions={n_areas}")
         
         # Apply scaling/normalization
         if self.normalize_stats is not None:
@@ -1905,9 +1992,13 @@ class WidefieldTrialDataset(Dataset):
             else:
                 raise ValueError(f"Unknown normalization type: {self.normalize_stats['normalization_type']}")
         
-        # Transpose to match model expectation: (time_points, n_brain_areas) -> (n_brain_areas, time_points)
-        trial_data = trial_data.T
-        return torch.FloatTensor(trial_data), torch.LongTensor([label])[0], mouse_id
+        # Return (timepoints, brain_areas) - model expects (batch, time_points, n_brain_areas)
+        # Support both classification (int labels) and regression (float labels)
+        if np.issubdtype(type(label), np.floating) or isinstance(label, float):
+            label_tensor = torch.tensor(label, dtype=torch.float32)
+        else:
+            label_tensor = torch.LongTensor([int(label)])[0]
+        return torch.FloatTensor(trial_data), label_tensor, mouse_id
 
 
 def compute_normalization_stats(

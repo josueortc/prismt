@@ -10,6 +10,7 @@ import os
 import math
 import json
 import argparse
+import json
 import logging
 from pathlib import Path
 from dataclasses import dataclass, asdict
@@ -174,6 +175,8 @@ def objective(
     task_type: str,
     n_brain_areas: int,
     time_points: int,
+    target_values=None,
+    filters=None,
 ) -> float:
     cfg = TrialConfig(
         lr=trial.suggest_float("lr", 1e-5, 5e-3, log=True),
@@ -202,7 +205,8 @@ def objective(
 
     try:
         return _run_trial(trial, args, cfg, dataset, train_indices, val_indices,
-                         task_type, n_brain_areas, time_points)
+                         task_type, n_brain_areas, time_points,
+                         target_values=target_values, filters=filters)
     except RuntimeError as e:
         if "CUDA out of memory" in str(e) or "out of memory" in str(e).lower():
             torch.cuda.empty_cache()
@@ -220,9 +224,18 @@ def _run_trial(
     task_type: str,
     n_brain_areas: int,
     time_points: int,
+    target_values=None,
+    filters=None,
 ) -> float:
     set_seed(cfg.seed + trial.number)
     device = get_device(args.device)
+    if target_values is None and args.target_values:
+        target_values = [v.strip() for v in args.target_values.split(",") if v.strip()]
+    if filters is None and args.filters:
+        try:
+            filters = json.loads(args.filters)
+        except json.JSONDecodeError:
+            filters = None
 
     train_loader, val_loader, _ = create_data_loaders_unified(
         dataset,
@@ -234,6 +247,12 @@ def _run_trial(
         num_workers=args.num_workers,
         phase1=args.phase1,
         phase2=args.phase2,
+        region_pool=args.region_pool,
+        time_pool=args.time_pool,
+        task_mode=args.task_mode,
+        target_column=args.target_column,
+        target_values=target_values,
+        filters=filters,
     )
 
     model = WidefieldTransformer(
@@ -312,6 +331,12 @@ def main():
     parser.add_argument("--task_type", type=str, default="auto", choices=["auto", "genotype", "phase"])
     parser.add_argument("--phase1", type=str, default=None)
     parser.add_argument("--phase2", type=str, default=None)
+    parser.add_argument("--task_mode", type=str, default="classification", choices=["classification", "regression"])
+    parser.add_argument("--target_column", type=str, default=None, help="Column to predict (phase, mouse, stim, response)")
+    parser.add_argument("--target_values", type=str, default=None, help="Comma-separated values for classification")
+    parser.add_argument("--filters", type=str, default=None, help="JSON filters, e.g. '{\"stim\":[1],\"response\":[0,1]}'")
+    parser.add_argument("--region_pool", type=int, default=1, help="Pool factor for brain regions (1=none, 2=avg pairs)")
+    parser.add_argument("--time_pool", type=int, default=1, help="Pool factor for timepoints (1=none, 2=avg pairs)")
     parser.add_argument("--val_split", type=float, default=0.2)
     parser.add_argument("--n_trials", type=int, default=30)
     parser.add_argument("--max_epochs", type=int, default=30, help="Epochs per trial")
@@ -352,11 +377,22 @@ def main():
     else:
         task_type = args.task_type
 
-    if task_type == "phase" and (args.phase1 is None or args.phase2 is None):
+    if args.target_column is None and task_type == "phase" and (args.phase1 is None or args.phase2 is None):
         raise ValueError("--phase1 and --phase2 required for phase task")
 
+    target_values = None
+    filters = None
+    if args.target_values:
+        target_values = [v.strip() for v in args.target_values.split(",") if v.strip()]
+    if args.filters:
+        try:
+            filters = json.loads(args.filters)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid --filters JSON: {e}") from e
+
+    split_task = "phase" if args.target_column else task_type
     train_indices, val_indices = create_train_val_split(
-        dataset, task_type, args.val_split, args.seed
+        dataset, split_task, args.val_split, args.seed
     )
 
     train_loader, _, _ = create_data_loaders_unified(
@@ -369,11 +405,18 @@ def main():
         num_workers=0,
         phase1=args.phase1,
         phase2=args.phase2,
+        region_pool=args.region_pool,
+        time_pool=args.time_pool,
+        task_mode=args.task_mode,
+        target_column=args.target_column,
+        target_values=target_values,
+        filters=filters,
     )
     sample_batch, _ = next(iter(train_loader))
     sample_data = sample_batch[0] if isinstance(sample_batch, (tuple, list)) else sample_batch
-    n_brain_areas = sample_data.shape[2]
+    # Batch shape: (batch, time_points, n_brain_areas)
     time_points = sample_data.shape[1]
+    n_brain_areas = sample_data.shape[2]
 
     os.makedirs(args.out_dir, exist_ok=True)
 
@@ -396,6 +439,8 @@ def main():
         lambda t: objective(
             t, args, dataset, train_indices, val_indices,
             task_type, n_brain_areas, time_points,
+            target_values=target_values,
+            filters=filters,
         ),
         n_trials=args.n_trials,
     )
@@ -437,6 +482,12 @@ def main():
             num_workers=args.num_workers,
             phase1=args.phase1,
             phase2=args.phase2,
+            region_pool=args.region_pool,
+            time_pool=args.time_pool,
+            task_mode=args.task_mode,
+            target_column=args.target_column,
+            target_values=target_values,
+            filters=filters,
         )
         run_attention_and_diagnosis(
             model=best_model,

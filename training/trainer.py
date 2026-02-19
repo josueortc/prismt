@@ -174,8 +174,11 @@ class Trainer:
             lr=learning_rate,
             weight_decay=weight_decay
         )
-        # Use label smoothing to reduce overfitting
-        self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+        task_mode = getattr(model, 'task_mode', 'classification')
+        if task_mode == 'regression':
+            self.criterion = nn.MSELoss()
+        else:
+            self.criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
         
         # Learning rate scheduler
         self.scheduler_type = scheduler_type
@@ -306,55 +309,61 @@ class Trainer:
             
             # Statistics
             total_loss += loss.item()
-            predictions = torch.argmax(logits, dim=1)
-            correct_predictions += (predictions == labels).sum().item()
+            is_regression = getattr(self.model, 'task_mode', 'classification') == 'regression'
+            if is_regression:
+                # For regression: use R² as proxy for accuracy
+                with torch.no_grad():
+                    ss_res = ((labels - logits) ** 2).sum().item()
+                    ss_tot = ((labels - labels.mean()) ** 2).sum().item()
+                    batch_r2 = 1 - (ss_res / (ss_tot + 1e-8)) if ss_tot > 0 else 0.0
+                correct_predictions += batch_r2 * labels.size(0)
+                predictions = None
+            else:
+                predictions = torch.argmax(logits, dim=1)
+                correct_predictions += (predictions == labels).sum().item()
+                batch_r2 = 0.0
             total_samples += labels.size(0)
             
             # Log batch statistics
             if batch_idx % 50 == 0:
-                batch_acc = (predictions == labels).float().mean().item()
+                batch_acc = batch_r2 if is_regression else (predictions == labels).float().mean().item()
                 
-                # Calculate batch F1 score
-                batch_predictions = predictions.cpu().numpy()
-                batch_labels = labels.cpu().numpy()
+                if is_regression:
+                    batch_f1 = 0.0
+                    batch_macro_f1 = 0.0
+                    logger.info(
+                        f"Train Batch {batch_idx}/{len(self.train_loader)}: "
+                        f"Loss={loss.item():.4f}, R²={batch_acc:.4f}"
+                    )
+                else:
+                    # Calculate batch F1 score
+                    batch_predictions = predictions.cpu().numpy()
+                    batch_labels = labels.cpu().numpy()
+                    tp = np.sum((batch_predictions == 1) & (batch_labels == 1))
+                    fp = np.sum((batch_predictions == 1) & (batch_labels == 0))
+                    fn = np.sum((batch_predictions == 0) & (batch_labels == 1))
+                    batch_precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+                    batch_recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+                    batch_f1 = 2 * (batch_precision * batch_recall) / (batch_precision + batch_recall) if (batch_precision + batch_recall) > 0 else 0.0
+                    tp_0 = np.sum((batch_predictions == 0) & (batch_labels == 0))
+                    fp_0 = np.sum((batch_predictions == 0) & (batch_labels == 1))
+                    fn_0 = np.sum((batch_predictions == 1) & (batch_labels == 0))
+                    precision_0 = tp_0 / (tp_0 + fp_0) if (tp_0 + fp_0) > 0 else 0.0
+                    recall_0 = tp_0 / (tp_0 + fn_0) if (tp_0 + fn_0) > 0 else 0.0
+                    f1_0 = 2 * (precision_0 * recall_0) / (precision_0 + recall_0) if (precision_0 + recall_0) > 0 else 0.0
+                    batch_macro_f1 = (f1_0 + batch_f1) / 2
+                    logger.info(
+                        f"Train Batch {batch_idx}/{len(self.train_loader)}: "
+                        f"Loss={loss.item():.4f}, Acc={batch_acc:.4f}, "
+                        f"F1={batch_f1:.4f}, MacroF1={batch_macro_f1:.4f}"
+                    )
                 
-                # Calculate F1 for this batch
-                tp = np.sum((batch_predictions == 1) & (batch_labels == 1))
-                fp = np.sum((batch_predictions == 1) & (batch_labels == 0))
-                fn = np.sum((batch_predictions == 0) & (batch_labels == 1))
-                
-                batch_precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-                batch_recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-                batch_f1 = 2 * (batch_precision * batch_recall) / (batch_precision + batch_recall) if (batch_precision + batch_recall) > 0 else 0.0
-                
-                # Also calculate macro F1 (average of both classes)
-                # F1 for class 0
-                tp_0 = np.sum((batch_predictions == 0) & (batch_labels == 0))
-                fp_0 = np.sum((batch_predictions == 0) & (batch_labels == 1))
-                fn_0 = np.sum((batch_predictions == 1) & (batch_labels == 0))
-                
-                precision_0 = tp_0 / (tp_0 + fp_0) if (tp_0 + fp_0) > 0 else 0.0
-                recall_0 = tp_0 / (tp_0 + fn_0) if (tp_0 + fn_0) > 0 else 0.0
-                f1_0 = 2 * (precision_0 * recall_0) / (precision_0 + recall_0) if (precision_0 + recall_0) > 0 else 0.0
-                
-                # F1 for class 1 (same as batch_f1 above)
-                f1_1 = batch_f1
-                
-                batch_macro_f1 = (f1_0 + f1_1) / 2
-                
-                logger.info(
-                    f"Train Batch {batch_idx}/{len(self.train_loader)}: "
-                    f"Loss={loss.item():.4f}, Acc={batch_acc:.4f}, "
-                    f"F1={batch_f1:.4f}, MacroF1={batch_macro_f1:.4f}"
-                )
-                
-                # Log to wandb
                 if wandb.run is not None:
                     wandb.log({
                         "batch_train_loss": loss.item(),
                         "batch_train_accuracy": batch_acc,
-                        "batch_train_f1": batch_f1,
-                        "batch_train_macro_f1": batch_macro_f1,
+                        "batch_train_f1": batch_f1 if not is_regression else 0,
+                        "batch_train_macro_f1": batch_macro_f1 if not is_regression else 0,
                         "learning_rate": self.optimizer.param_groups[0]['lr']
                     })
         
@@ -380,92 +389,72 @@ class Trainer:
         all_labels = []
         all_logits = []
         
+        is_regression = getattr(self.model, 'task_mode', 'classification') == 'regression'
         with torch.no_grad():
             for batch in self.val_loader:
-                # Handle both old format (data, label) and new format (data, label, mouse_id)
                 if len(batch) == 2:
                     data, labels = batch
                 elif len(batch) == 3:
-                    data, labels, _ = batch  # Ignore mouse_id during validation
+                    data, labels, _ = batch
                 else:
                     raise ValueError(f"Unexpected batch format: {len(batch)} elements")
-                # Move data to device
                 data = data.to(self.device)
                 labels = labels.to(self.device)
                 
-                # Forward pass
                 logits, _ = self.model(data)
                 loss = self.criterion(logits, labels)
                 
-                # Statistics
                 total_loss += loss.item()
-                predictions = torch.argmax(logits, dim=1)
-                correct_predictions += (predictions == labels).sum().item()
+                if is_regression:
+                    ss_res = ((labels - logits) ** 2).sum().item()
+                    ss_tot = ((labels - labels.mean()) ** 2).sum().item()
+                    batch_r2 = 1 - (ss_res / (ss_tot + 1e-8)) if ss_tot > 0 else 0.0
+                    correct_predictions += batch_r2 * labels.size(0)
+                    predictions = logits
+                else:
+                    predictions = torch.argmax(logits, dim=1)
+                    correct_predictions += (predictions == labels).sum().item()
                 total_samples += labels.size(0)
                 
-                # Collect predictions, labels, and logits for detailed analysis
-                all_predictions.extend(predictions.cpu().numpy())
-                all_labels.extend(labels.cpu().numpy())
-                all_logits.extend(logits.cpu().numpy())
+                all_predictions.extend(predictions.cpu().numpy().flatten().tolist())
+                all_labels.extend(labels.cpu().numpy().flatten().tolist())
+                all_logits.extend(logits.cpu().numpy().flatten().tolist())
         
         avg_loss = total_loss / len(self.val_loader)
         accuracy = correct_predictions / total_samples
         
-        # Convert to numpy arrays for analysis
         all_predictions = np.array(all_predictions)
         all_labels = np.array(all_labels)
         all_logits = np.array(all_logits)
         
-        # Detailed prediction analysis
-        unique_preds, pred_counts = np.unique(all_predictions, return_counts=True)
-        unique_labels, label_counts = np.unique(all_labels, return_counts=True)
+        if is_regression:
+            unique_preds, pred_counts = np.array([0]), np.array([len(all_predictions)])
+            unique_labels, label_counts = np.unique(all_labels, return_counts=True)
+            macro_f1 = 0.0
+        else:
+            unique_preds, pred_counts = np.unique(all_predictions, return_counts=True)
+            unique_labels, label_counts = np.unique(all_labels, return_counts=True)
         
-        # Log prediction statistics every 10 epochs for debugging
-        if hasattr(self, 'current_epoch') and self.current_epoch % 10 == 0:
-            logger.info(f"Validation Analysis (Epoch {self.current_epoch}):")
-            logger.info(f"  Predictions distribution: {dict(zip(unique_preds, pred_counts))}")
-            logger.info(f"  Labels distribution: {dict(zip(unique_labels, label_counts))}")
-            logger.info(f"  Logits mean: {np.mean(all_logits, axis=0)}")
-            logger.info(f"  Logits std: {np.std(all_logits, axis=0)}")
-            logger.info(f"  Prediction entropy: {-np.mean(np.sum(np.exp(all_logits) / np.sum(np.exp(all_logits), axis=1, keepdims=True) * np.log(np.exp(all_logits) / np.sum(np.exp(all_logits), axis=1, keepdims=True) + 1e-8), axis=1)):.4f}")
-        
-        # Calculate confusion matrix elements
-        tp = np.sum((all_predictions == 1) & (all_labels == 1))
-        fp = np.sum((all_predictions == 1) & (all_labels == 0))
-        fn = np.sum((all_predictions == 0) & (all_labels == 1))
-        tn = np.sum((all_predictions == 0) & (all_labels == 0))
-        
-        # Compute F1 score for class 1 (positive class)
-        precision_1 = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall_1 = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1_1 = 2 * (precision_1 * recall_1) / (precision_1 + recall_1) if (precision_1 + recall_1) > 0 else 0.0
-        
-        # Compute F1 score for class 0 (negative class)
-        precision_0 = tn / (tn + fn) if (tn + fn) > 0 else 0.0
-        recall_0 = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-        f1_0 = 2 * (precision_0 * recall_0) / (precision_0 + recall_0) if (precision_0 + recall_0) > 0 else 0.0
-        
-        # Macro-averaged F1 (average of both classes)
-        macro_f1 = (f1_0 + f1_1) / 2
-        
-        # Check for data distribution issues
-        class_0_count = np.sum(all_labels == 0)
-        class_1_count = np.sum(all_labels == 1)
-        
-        # Warning for severe class imbalance or missing classes
-        if class_0_count == 0 or class_1_count == 0:
-            logger.warning(f"⚠️  VALIDATION DATA ISSUE: Missing class in validation set!")
-            logger.warning(f"   Class 0 samples: {class_0_count}, Class 1 samples: {class_1_count}")
-            logger.warning(f"   This will cause F1 score issues. Check cross-validation splits!")
-        
-        # Additional logging for debugging accuracy issues
-        if hasattr(self, 'current_epoch') and self.current_epoch % 10 == 0:
-            logger.info(f"  Confusion Matrix: TP={tp}, FP={fp}, FN={fn}, TN={tn}")
-            logger.info(f"  Class distribution: Class0={class_0_count}, Class1={class_1_count}")
-            logger.info(f"  Class 0: Precision={precision_0:.4f}, Recall={recall_0:.4f}, F1={f1_0:.4f}")
-            logger.info(f"  Class 1: Precision={precision_1:.4f}, Recall={recall_1:.4f}, F1={f1_1:.4f}")
-            logger.info(f"  Macro F1={macro_f1:.4f}, Binary F1={f1_1:.4f}")
-            logger.info(f"  Accuracy calculation: {correct_predictions}/{total_samples} = {accuracy:.4f}")
+        # Classification-specific: confusion matrix and F1
+        if not is_regression:
+            if hasattr(self, 'current_epoch') and self.current_epoch % 10 == 0:
+                logger.info(f"Validation Analysis (Epoch {self.current_epoch}):")
+                logger.info(f"  Predictions distribution: {dict(zip(unique_preds, pred_counts))}")
+                logger.info(f"  Labels distribution: {dict(zip(unique_labels, label_counts))}")
+            tp = np.sum((all_predictions == 1) & (all_labels == 1))
+            fp = np.sum((all_predictions == 1) & (all_labels == 0))
+            fn = np.sum((all_predictions == 0) & (all_labels == 1))
+            tn = np.sum((all_predictions == 0) & (all_labels == 0))
+            precision_1 = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall_1 = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1_1 = 2 * (precision_1 * recall_1) / (precision_1 + recall_1) if (precision_1 + recall_1) > 0 else 0.0
+            precision_0 = tn / (tn + fn) if (tn + fn) > 0 else 0.0
+            recall_0 = tn / (tn + fp) if (tn + fp) > 0 else 0.0
+            f1_0 = 2 * (precision_0 * recall_0) / (precision_0 + recall_0) if (precision_0 + recall_0) > 0 else 0.0
+            macro_f1 = (f1_0 + f1_1) / 2
+            if hasattr(self, 'current_epoch') and self.current_epoch % 10 == 0:
+                logger.info(f"  Confusion Matrix: TP={tp}, FP={fp}, FN={fn}, TN={tn}")
+                logger.info(f"  Macro F1={macro_f1:.4f}, Binary F1={f1_1:.4f}")
         
         # Return macro F1 as the primary F1 score
         return avg_loss, accuracy, macro_f1
