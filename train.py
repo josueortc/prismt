@@ -33,8 +33,23 @@ from data.data_loader import (
 from models.transformer import create_model
 from training.trainer import Trainer, run_attention_and_diagnosis
 from utils.helpers import setup_logging, set_seed, get_device, format_time
+from evaluation.visualization import create_comprehensive_report
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_indices_arg(s: Optional[str], allow_range: bool = True) -> Optional[List[int]]:
+    """Parse comma-separated indices or range (e.g. 10:22) into a list of ints."""
+    if not s or not str(s).strip():
+        return None
+    s = str(s).strip()
+    if ":" in s and allow_range:
+        parts = s.split(":")
+        if len(parts) != 2:
+            raise ValueError(f"Invalid range format: {s}. Use start:end (e.g. 10:22)")
+        start, end = int(parts[0].strip()), int(parts[1].strip())
+        return list(range(start, end + 1))
+    return [int(x.strip()) for x in s.split(",") if x.strip()]
 
 
 def detect_task_type(dataset: WidefieldDataset) -> str:
@@ -130,17 +145,45 @@ def create_data_loaders_unified(
             dataset, train_indices, val_indices, data_type, batch_size, num_workers,
             task_mode=task_mode, target_column=target_column,
             target_values=target_values, filters=filters,
-            region_pool=region_pool, time_pool=time_pool
+            region_pool=region_pool, time_pool=time_pool,
+            timepoint_indices=timepoint_indices, exclude_brain_regions=exclude_brain_regions
         )
     if task_type == 'genotype':
         return create_genotype_data_loaders(
             dataset, train_indices, val_indices, data_type, batch_size, num_workers,
-            region_pool=region_pool, time_pool=time_pool
+            region_pool=region_pool, time_pool=time_pool,
+            timepoint_indices=timepoint_indices, exclude_brain_regions=exclude_brain_regions
         )
     return create_phase_data_loaders(
         dataset, train_indices, val_indices, data_type, batch_size, num_workers,
-        phase1, phase2, region_pool=region_pool, time_pool=time_pool
+        phase1, phase2, region_pool=region_pool, time_pool=time_pool,
+        timepoint_indices=timepoint_indices, exclude_brain_regions=exclude_brain_regions
     )
+
+
+def _apply_timepoint_and_region_filters(
+    train_neural: np.ndarray,
+    val_neural: np.ndarray,
+    timepoint_indices: Optional[List[int]] = None,
+    exclude_brain_regions: Optional[List[int]] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Apply timepoint selection and brain region exclusion to neural data (trials, timepoints, brain_areas)."""
+    if timepoint_indices is not None:
+        n_tp = train_neural.shape[1]
+        if max(timepoint_indices) >= n_tp or min(timepoint_indices) < 0:
+            raise ValueError(f"timepoint_indices must be in [0, {n_tp-1}], got {timepoint_indices}")
+        train_neural = train_neural[:, timepoint_indices, :]
+        val_neural = val_neural[:, timepoint_indices, :]
+        logger.info(f"Selected timepoints (0-indexed): {timepoint_indices}")
+    if exclude_brain_regions is not None:
+        n_areas = train_neural.shape[2]
+        keep = [i for i in range(n_areas) if i not in exclude_brain_regions]
+        if len(keep) == 0:
+            raise ValueError(f"Cannot exclude all brain regions. Excluded: {exclude_brain_regions}")
+        train_neural = train_neural[:, :, keep]
+        val_neural = val_neural[:, :, keep]
+        logger.info(f"Excluded brain regions {exclude_brain_regions}, keeping {len(keep)}/{n_areas}")
+    return train_neural, val_neural
 
 
 def create_flexible_data_loaders(
@@ -156,6 +199,8 @@ def create_flexible_data_loaders(
     filters: Optional[Dict[str, List[Any]]] = None,
     region_pool: int = 1,
     time_pool: int = 1,
+    timepoint_indices: Optional[List[int]] = None,
+    exclude_brain_regions: Optional[List[int]] = None,
 ) -> Tuple[DataLoader, DataLoader, dict]:
     """Create data loaders with dataset-agnostic, column-based condition selection."""
     filters = filters or {}
@@ -203,6 +248,9 @@ def create_flexible_data_loaders(
         val_labels = val_targets
     else:
         val_neural, val_labels, val_idx, val_mice = result
+    train_neural, val_neural = _apply_timepoint_and_region_filters(
+        train_neural, val_neural, timepoint_indices, exclude_brain_regions
+    )
     if target_column == 'mouse':
         if target_values and len(target_values) > 2:
             # Multiclass: map mouse_id to index in target_values
@@ -251,6 +299,8 @@ def create_genotype_data_loaders(
     num_workers: int = 4,
     region_pool: int = 1,
     time_pool: int = 1,
+    timepoint_indices: Optional[List[int]] = None,
+    exclude_brain_regions: Optional[List[int]] = None,
 ) -> Tuple[DataLoader, DataLoader, dict]:
     """Create data loaders for genotype classification (CDKL5)."""
     # Detect available stim and response values
@@ -295,6 +345,9 @@ def create_genotype_data_loaders(
     )
     val_neural_data, val_labels_phase, val_trial_indices, val_mouse_ids = task_definition.filter_trials(
         dataset, val_indices, data_type
+    )
+    train_neural_data, val_neural_data = _apply_timepoint_and_region_filters(
+        train_neural_data, val_neural_data, timepoint_indices, exclude_brain_regions
     )
     
     # Create genotype labels from mouse IDs
@@ -376,6 +429,8 @@ def create_phase_data_loaders(
     phase2: Optional[str] = None,
     region_pool: int = 1,
     time_pool: int = 1,
+    timepoint_indices: Optional[List[int]] = None,
+    exclude_brain_regions: Optional[List[int]] = None,
 ) -> Tuple[DataLoader, DataLoader, dict]:
     """Create data loaders for phase classification (widefield)."""
     if phase1 is None or phase2 is None:
@@ -595,6 +650,16 @@ def parse_arguments():
                         help='Factor to increase restart period')
     parser.add_argument('--cosine_eta_min', type=float, default=1e-6,
                         help='Minimum learning rate')
+    parser.add_argument('--gradient_clip', type=float, default=0.5,
+                        help='Gradient clipping value (0 to disable)')
+    parser.add_argument('--early_stopping_patience', type=int, default=15,
+                        help='Early stopping patience (epochs without improvement)')
+    
+    # Tokenization / data selection
+    parser.add_argument('--timepoint_indices', type=str, default=None,
+                        help='Comma-separated timepoint indices (0-indexed), e.g. 10,11,12 or 10:22 for range')
+    parser.add_argument('--exclude_brain_regions', type=str, default=None,
+                        help='Comma-separated brain region indices to exclude (0-indexed), e.g. 5,12,38')
     
     # Other parameters
     parser.add_argument('--device', type=str, default='auto',
@@ -605,6 +670,8 @@ def parse_arguments():
                         help='Directory to save results')
     parser.add_argument('--attention_samples', type=int, default=1000,
                         help='Number of samples for attention extraction (post-training)')
+    parser.add_argument('--atlas_type', type=str, default='grid', choices=['grid', 'allen'],
+                        help='Atlas type for brain map visualization')
     
     # WandB arguments
     parser.add_argument('--wandb_project', type=str, default='prismt',
@@ -657,6 +724,21 @@ def main():
             logger.error(f"Invalid --filters JSON: {e}")
             sys.exit(1)
     
+    timepoint_indices = None
+    if args.timepoint_indices:
+        try:
+            timepoint_indices = _parse_indices_arg(args.timepoint_indices)
+        except ValueError as e:
+            logger.error(f"Invalid --timepoint_indices: {e}")
+            sys.exit(1)
+    exclude_brain_regions = None
+    if args.exclude_brain_regions:
+        try:
+            exclude_brain_regions = _parse_indices_arg(args.exclude_brain_regions, allow_range=False)
+        except ValueError as e:
+            logger.error(f"Invalid --exclude_brain_regions: {e}")
+            sys.exit(1)
+    
     # Validate phase arguments for phase classification (legacy)
     if task_type == 'phase' and target_column is None:
         if args.phase1 is None or args.phase2 is None:
@@ -677,7 +759,8 @@ def main():
         phase1=args.phase1, phase2=args.phase2,
         region_pool=args.region_pool, time_pool=args.time_pool,
         task_mode=args.task_mode, target_column=target_column,
-        target_values=target_values, filters=filters
+        target_values=target_values, filters=filters,
+        timepoint_indices=timepoint_indices, exclude_brain_regions=exclude_brain_regions
     )
     
     # Get sample data to determine dimensions (batch shape: batch, time_points, n_brain_areas)
@@ -732,7 +815,9 @@ def main():
         warmup_epochs=args.warmup_epochs,
         cosine_t_0=args.cosine_t_0,
         cosine_t_mult=args.cosine_t_mult,
-        cosine_eta_min=args.cosine_eta_min
+        cosine_eta_min=args.cosine_eta_min,
+        gradient_clip=args.gradient_clip,
+        early_stopping_patience=args.early_stopping_patience,
     )
     
     # Train
@@ -767,13 +852,30 @@ def main():
     # Attention extraction and diagnosis on best model
     logger.info("Extracting attention and running diagnosis on best model...")
     best_model = trainer.get_best_model()
-    run_attention_and_diagnosis(
+    diagnosis, attention_matrix, _ = run_attention_and_diagnosis(
         model=best_model,
         data_loader=val_loader,
         device=device,
         save_dir=args.save_dir,
         num_samples=args.attention_samples,
-        num_classes=2,
+        num_classes=num_classes,
+    )
+    
+    # Post-training visualization and comprehensive report
+    logger.info("Creating post-training visualizations and comprehensive report...")
+    phase1 = args.phase1 if args.phase1 is not None else "early"
+    phase2 = args.phase2 if args.phase2 is not None else "late"
+    create_comprehensive_report(
+        attention_matrix=attention_matrix,
+        save_dir=args.save_dir,
+        history=history,
+        model=best_model,
+        diagnosis=diagnosis,
+        task_name=task_type,
+        phase1=phase1,
+        phase2=phase2,
+        stim_value=1,
+        atlas_type=args.atlas_type,
     )
     
     logger.info("=" * 80)

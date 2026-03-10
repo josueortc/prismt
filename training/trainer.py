@@ -139,7 +139,9 @@ class Trainer:
         warmup_epochs: int = 5,
         cosine_t_0: int = 10,
         cosine_t_mult: int = 2,
-        cosine_eta_min: float = 1e-6
+        cosine_eta_min: float = 1e-6,
+        gradient_clip: float = 0.5,
+        early_stopping_patience: int = 15,
     ):
         """
         Initialize the trainer.
@@ -159,6 +161,8 @@ class Trainer:
             cosine_t_0: Initial restart period for cosine annealing
             cosine_t_mult: Factor to increase restart period
             cosine_eta_min: Minimum learning rate for cosine annealing
+            gradient_clip: Max gradient norm for clipping (0 to disable)
+            early_stopping_patience: Epochs without improvement before stopping
         """
         self.model = model
         self.train_loader = train_loader
@@ -234,7 +238,8 @@ class Trainer:
         # Early stopping based on validation loss
         self.best_val_loss = float('inf')
         self.patience_counter = 0
-        self.early_stopping_patience = 15
+        self.early_stopping_patience = early_stopping_patience
+        self.gradient_clip = gradient_clip
         
         # Weights & Biases
         self.wandb_project = wandb_project
@@ -302,8 +307,8 @@ class Trainer:
             # Backward pass
             loss.backward()
             
-            # Gradient clipping (more aggressive to prevent overfitting)
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=0.5)
+            if self.gradient_clip > 0:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=self.gradient_clip)
             
             self.optimizer.step()
             

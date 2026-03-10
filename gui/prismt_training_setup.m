@@ -36,7 +36,7 @@ function createUIFigure()
 
     % Main grid: responsive layout that grows with window
     mainGrid = uigridlayout(fig, [8 2]);
-    mainGrid.RowHeight = {42, 115, 130, 170, 40, '1x', '1x', 28};
+    mainGrid.RowHeight = {42, 115, 130, 200, 40, '1x', '1x', 28};
     mainGrid.ColumnWidth = {'1x', 300};
     mainGrid.Padding = [MAR MAR MAR MAR];
     mainGrid.RowSpacing = PAD;
@@ -75,9 +75,9 @@ function createUIFigure()
     p2 = uipanel(mainGrid, 'Title', '2. Input & Tokenization', 'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     p2.Layout.Row = 3;
     p2.Layout.Column = [1 2];
-    gl2 = uigridlayout(p2, [3 6]);
+    gl2 = uigridlayout(p2, [5 6]);
     gl2.ColumnWidth = {'fit', 100, 'fit', 200, 'fit', '1x'};
-    gl2.RowHeight = {32, 32, 32};
+    gl2.RowHeight = {32, 32, 32, 32, 32};
     gl2.Padding = [12 12 12 12];
     gl2.RowSpacing = 6;
     uilabel(gl2, 'Text', 'Data type:');
@@ -89,20 +89,24 @@ function createUIFigure()
     regionPoolDD = uidropdown(gl2, 'Items', {'None (1)', '2 (avg pairs)', '4', '8'}, 'Value', 'None (1)');
     uilabel(gl2, 'Text', 'Time pool:');
     timePoolDD = uidropdown(gl2, 'Items', {'None (1)', '2 (avg pairs)', '4', '8'}, 'Value', 'None (1)');
+    uilabel(gl2, 'Text', 'Timepoints:');  % Row 4
+    timepointsEdit = uieditfield(gl2, 'text', 'Value', 'all', 'Placeholder', 'all or 10:22 or 10,11,12');
+    uilabel(gl2, 'Text', 'Exclude regions:');
+    excludeRegionsEdit = uieditfield(gl2, 'text', 'Value', 'none', 'Placeholder', 'none or 5,12,38');
     tokLbl = uilabel(gl2, 'Text', 'Tokenization:');
-    tokLbl.Layout.Row = 3;
+    tokLbl.Layout.Row = 5;
     tokLbl.Layout.Column = 1;
     tokenInfoLabel = uilabel(gl2, 'Text', 'Load data to see tokenization.', 'FontColor', [0.45 0.45 0.45]);
-    tokenInfoLabel.Layout.Row = 3;
+    tokenInfoLabel.Layout.Row = 5;
     tokenInfoLabel.Layout.Column = [2 6];
 
     % === PANEL 3: Conditions ===
     p3 = uipanel(mainGrid, 'Title', '3. Comparison Conditions', 'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     p3.Layout.Row = 4;
     p3.Layout.Column = [1 2];
-    gl3 = uigridlayout(p3, [4 10]);
+    gl3 = uigridlayout(p3, [6 10]);
     gl3.ColumnWidth = {'fit', 100, 'fit', 95, 'fit', 130, 'fit', 85, 'fit', 85};
-    gl3.RowHeight = {32, 32, 32, 32};
+    gl3.RowHeight = {32, 32, 32, 32, 32, 32};
     gl3.Padding = [12 12 12 12];
     gl3.RowSpacing = 6;
     uilabel(gl3, 'Text', 'Mode:');
@@ -115,14 +119,37 @@ function createUIFigure()
     class1DD = uidropdown(gl3, 'Items', {'early', 'mid', 'late'}, 'Value', 'early');
     class2Label = uilabel(gl3, 'Text', 'vs Class 2:');
     class2DD = uidropdown(gl3, 'Items', {'early', 'mid', 'late'}, 'Value', 'late');
-    uilabel(gl3, 'Text', 'Filter stim:');
-    stimEdit = uieditfield(gl3, 'text', 'Value', '1');
-    uilabel(gl3, 'Text', 'Filter response:');
-    responseEdit = uieditfield(gl3, 'text', 'Value', '0, 1');
-    phaseFilterLabel = uilabel(gl3, 'Text', 'Filter phase:');
-    phaseFilterEdit = uieditfield(gl3, 'text', 'Value', 'early, mid, late');
-    uilabel(gl3, 'Text', 'Seed:');
+    % Filter rows: one per possible column (stim, response, phase, mouse); visibility set by updateFilterUI
+    filterStimLbl = uilabel(gl3, 'Text', 'Filter stim:');
+    filterStimLbl.Layout.Row = 3;
+    filterStimLbl.Layout.Column = [1 2];
+    filterStimEdit = uieditfield(gl3, 'text', 'Value', 'all');
+    filterStimEdit.Layout.Row = 3;
+    filterStimEdit.Layout.Column = [3 4];
+    filterRespLbl = uilabel(gl3, 'Text', 'Filter response:');
+    filterRespLbl.Layout.Row = 4;
+    filterRespLbl.Layout.Column = [1 2];
+    filterRespEdit = uieditfield(gl3, 'text', 'Value', 'all');
+    filterRespEdit.Layout.Row = 4;
+    filterRespEdit.Layout.Column = [3 4];
+    filterPhaseLbl = uilabel(gl3, 'Text', 'Filter phase:');
+    filterPhaseLbl.Layout.Row = 5;
+    filterPhaseLbl.Layout.Column = [1 2];
+    filterPhaseEdit = uieditfield(gl3, 'text', 'Value', 'all');
+    filterPhaseEdit.Layout.Row = 5;
+    filterPhaseEdit.Layout.Column = [3 4];
+    filterMouseLbl = uilabel(gl3, 'Text', 'Filter mouse:');
+    filterMouseLbl.Layout.Row = 6;
+    filterMouseLbl.Layout.Column = [1 2];
+    filterMouseEdit = uieditfield(gl3, 'text', 'Value', 'all');
+    filterMouseEdit.Layout.Row = 6;
+    filterMouseEdit.Layout.Column = [3 4];
+    seedLbl = uilabel(gl3, 'Text', 'Seed:');
+    seedLbl.Layout.Row = 6;
+    seedLbl.Layout.Column = [5 6];
     seedEdit = uieditfield(gl3, 'numeric', 'Value', 42);
+    seedEdit.Layout.Row = 6;
+    seedEdit.Layout.Column = [7 8];
 
     % === MODE ROW ===
     modePanel = uipanel(mainGrid, 'Title', '', 'BackgroundColor', [0.98 0.98 1], 'BorderType', 'none');
@@ -142,9 +169,9 @@ function createUIFigure()
     p4 = uipanel(mainGrid, 'Title', '4. Training', 'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     p4.Layout.Row = 6;
     p4.Layout.Column = 1;
-    gl4 = uigridlayout(p4, [4 4]);
+    gl4 = uigridlayout(p4, [6 4]);
     gl4.ColumnWidth = {'fit', '1x', 'fit', '1x'};
-    gl4.RowHeight = {28, 28, 28, 28};
+    gl4.RowHeight = {28, 28, 28, 28, 28, 28};
     gl4.Padding = [12 12 12 12];
     gl4.RowSpacing = 6;
     uilabel(gl4, 'Text', 'Batch:'); batchEdit = uieditfield(gl4, 'numeric', 'Value', 16);
@@ -153,8 +180,14 @@ function createUIFigure()
     uilabel(gl4, 'Text', 'Weight decay:'); weightDecayEdit = uieditfield(gl4, 'text', 'Value', '1e-3');
     uilabel(gl4, 'Text', 'Val split:'); valSplitEdit = uieditfield(gl4, 'numeric', 'Value', 0.2, 'Limits', [0 1]);
     uilabel(gl4, 'Text', 'Save dir:'); saveDirEdit = uieditfield(gl4, 'text', 'Value', 'results');
+    uilabel(gl4, 'Text', 'Gradient clip:'); gradClipEdit = uieditfield(gl4, 'numeric', 'Value', 0.5);
+    uilabel(gl4, 'Text', 'Early stop:'); earlyStopEdit = uieditfield(gl4, 'numeric', 'Value', 15);
+    uilabel(gl4, 'Text', 'Cosine t_0/t_mult/eta_min:'); cosineT0Edit = uieditfield(gl4, 'numeric', 'Value', 10);
+    cosineTMultEdit = uieditfield(gl4, 'numeric', 'Value', 2);
+    cosineEtaMinEdit = uieditfield(gl4, 'text', 'Value', '1e-6');
     uilabel(gl4, 'Text', 'Output dir:');
     outputDirEdit = uieditfield(gl4, 'text', 'Value', fullfile(fileparts(fileparts(mfilename('fullpath'))), 'generated_scripts'));
+    outputDirEdit.Layout.Row = 6;
     outputDirEdit.Layout.Column = [2 4];
 
     % === PANEL 5: Model (right column) ===
@@ -174,14 +207,16 @@ function createUIFigure()
     uilabel(gl5, 'Text', 'Scheduler:');
     schedulerDD = uidropdown(gl5, 'Items', {'cosine_warmup', 'cosine', 'reduce_on_plateau', 'step'}, 'Value', 'cosine_warmup');
     uilabel(gl5, 'Text', 'Warmup:'); warmupEdit = uieditfield(gl5, 'numeric', 'Value', 5);
+    uilabel(gl5, 'Text', 'Atlas type:');
+    atlasTypeDD = uidropdown(gl5, 'Items', {'grid', 'allen'}, 'Value', 'grid');
 
     % === PANEL 6: Cluster (left column) ===
     p6 = uipanel(mainGrid, 'Title', '6. Cluster (SLURM)', 'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     p6.Layout.Row = 7;
     p6.Layout.Column = 1;
-    gl6 = uigridlayout(p6, [4 6]);
+    gl6 = uigridlayout(p6, [5 6]);
     gl6.ColumnWidth = {'fit', 'fit', 'fit', 'fit', 'fit', '1x'};
-    gl6.RowHeight = {28, 28, 28, 28};
+    gl6.RowHeight = {28, 28, 28, 28, 28};
     gl6.Padding = [12 12 12 12];
     gl6.RowSpacing = 6;
     uilabel(gl6, 'Text', 'Partition:'); partitionEdit = uieditfield(gl6, 'text', 'Value', 'gpu');
@@ -189,35 +224,46 @@ function createUIFigure()
     uilabel(gl6, 'Text', 'CPUs:'); cpusEdit = uieditfield(gl6, 'numeric', 'Value', 8);
     uilabel(gl6, 'Text', 'Mem:'); memEdit = uieditfield(gl6, 'numeric', 'Value', 32);
     uilabel(gl6, 'Text', 'Time(hr):'); timeEdit = uieditfield(gl6, 'numeric', 'Value', 24);
-    uilabel(gl6, 'Text', 'Data path on cluster:', 'Layout', struct('Row', 2, 'Column', [1 2]));
+    clusterDataLbl = uilabel(gl6, 'Text', 'Data path on cluster:');
+    clusterDataLbl.Layout.Row = 3;
+    clusterDataLbl.Layout.Column = [1 2];
     clusterDataEdit = uieditfield(gl6, 'text', 'Value', '');
-    clusterDataEdit.Layout.Row = 2;
+    clusterDataEdit.Layout.Row = 3;
     clusterDataEdit.Layout.Column = [3 6];
     clusterOutLabel = uilabel(gl6, 'Text', 'HPO out dir (cluster):');
-    clusterOutLabel.Layout.Row = 3;
+    clusterOutLabel.Layout.Row = 4;
     clusterOutLabel.Layout.Column = [1 2];
     clusterOutEdit = uieditfield(gl6, 'text', 'Value', '');
-    clusterOutEdit.Layout.Row = 3;
+    clusterOutEdit.Layout.Row = 4;
     clusterOutEdit.Layout.Column = [3 6];
-    uilabel(gl6, 'Text', 'Setup (conda activate, etc.):', 'Layout', struct('Row', 4, 'Column', [1 2]));
+    setupLbl = uilabel(gl6, 'Text', 'Setup (conda activate, etc.):');
+    setupLbl.Layout.Row = 5;
+    setupLbl.Layout.Column = [1 2];
     setupEdit = uieditfield(gl6, 'text', 'Value', '');
-    setupEdit.Layout.Row = 4;
+    setupEdit.Layout.Row = 5;
     setupEdit.Layout.Column = [3 6];
 
     % === ACTION PANEL (right column) ===
     actionPanel = uipanel(mainGrid, 'Title', 'Run', 'BackgroundColor', [0.96 0.97 1], 'FontWeight', 'bold');
     actionPanel.Layout.Row = 7;
     actionPanel.Layout.Column = 2;
-    actionGl = uigridlayout(actionPanel, [2 1]);
-    actionGl.RowHeight = {'1x', '1x'};
+    actionGl = uigridlayout(actionPanel, [4 2]);
+    actionGl.RowHeight = {'1x', '1x', 28, '1x'};
+    actionGl.ColumnWidth = {'1x', '1x'};
     actionGl.Padding = [12 12 12 12];
     actionGl.RowSpacing = 10;
     runBtn = uibutton(actionGl, 'Text', 'Run Training Now', 'BackgroundColor', [0.25 0.55 0.35], ...
         'FontColor', [1 1 1], 'FontSize', 12, 'FontWeight', 'bold', ...
         'ButtonPushedFcn', @(src,~) runTraining(src.Parent.Parent.Parent));
+    runBtn.Layout.Column = [1 2];
     genBtn = uibutton(actionGl, 'Text', 'Generate Cluster Script', 'BackgroundColor', [0.28 0.52 0.8], ...
         'FontColor', [1 1 1], 'FontWeight', 'bold', ...
         'ButtonPushedFcn', @(src,~) generateScript(src.Parent.Parent.Parent));
+    genBtn.Layout.Column = [1 2];
+    uilabel(actionGl, 'Text', 'Results dir:');
+    resultsDirEdit = uieditfield(actionGl, 'text', 'Value', 'results', 'Placeholder', 'results/');
+    runAnalysisBtn = uibutton(actionGl, 'Text', 'Run Analysis', 'BackgroundColor', [0.6 0.4 0.2], ...
+        'FontColor', [1 1 1], 'ButtonPushedFcn', @(src,~) runAnalysis(mainGrid.Parent));
 
     % === STATUS BAR ===
     statusPanel = uipanel(mainGrid, 'Title', '', 'BackgroundColor', [0.94 0.94 0.96], 'BorderType', 'none');
@@ -227,6 +273,13 @@ function createUIFigure()
     statusGl.Padding = [6 4 6 4];
     statusLabel = uilabel(statusGl, 'Text', 'Ready. Load a dataset to begin.', ...
         'FontColor', [0.45 0.45 0.45], 'FontSize', 10);
+
+    % Hide config panels until data is loaded
+    configPanels = {p2, p3, modePanel, p4, p5, p6, actionPanel};
+    for k = 1:numel(configPanels)
+        configPanels{k}.Visible = 'off';
+    end
+    mainGrid.RowHeight = {42, 115, 0, 0, 0, 0, 0, 28};
     
     % Fix runTraining/genBtn parent: fig is mainGrid.Parent
     runBtn.ButtonPushedFcn = @(src,~) runTraining(mainGrid.Parent);
@@ -234,16 +287,24 @@ function createUIFigure()
     
     % Store handles
     fig.UserData = struct(...
+        'mainGrid', mainGrid, 'configPanels', {configPanels}, ...
         'pathField', pathField, 'summaryLabel', summaryLabel, ...
         'dataTypeDD', dataTypeDD, 'normDD', normDD, 'tokenInfoLabel', tokenInfoLabel, ...
         'regionPoolDD', regionPoolDD, 'timePoolDD', timePoolDD, ...
+        'timepointsEdit', timepointsEdit, 'excludeRegionsEdit', excludeRegionsEdit, ...
         'taskModeDD', taskModeDD, 'targetColDD', targetColDD, ...
         'classTypeDD', classTypeDD, 'class1Label', class1Label, 'class1DD', class1DD, ...
         'class2Label', class2Label, 'class2DD', class2DD, ...
-        'phaseFilterLabel', phaseFilterLabel, 'phaseFilterEdit', phaseFilterEdit, ...
-        'stimEdit', stimEdit, 'responseEdit', responseEdit, 'seedEdit', seedEdit, ...
+        'filterStimLbl', filterStimLbl, 'filterStimEdit', filterStimEdit, ...
+        'filterRespLbl', filterRespLbl, 'filterRespEdit', filterRespEdit, ...
+        'filterPhaseLbl', filterPhaseLbl, 'filterPhaseEdit', filterPhaseEdit, ...
+        'filterMouseLbl', filterMouseLbl, 'filterMouseEdit', filterMouseEdit, ...
+        'seedEdit', seedEdit, ...
         'batchEdit', batchEdit, 'epochsEdit', epochsEdit, 'lrEdit', lrEdit, ...
         'weightDecayEdit', weightDecayEdit, 'valSplitEdit', valSplitEdit, 'saveDirEdit', saveDirEdit, ...
+        'gradClipEdit', gradClipEdit, 'earlyStopEdit', earlyStopEdit, ...
+        'cosineT0Edit', cosineT0Edit, 'cosineTMultEdit', cosineTMultEdit, 'cosineEtaMinEdit', cosineEtaMinEdit, ...
+        'atlasTypeDD', atlasTypeDD, ...
         'hiddenEdit', hiddenEdit, 'numHeadsEdit', numHeadsEdit, 'numLayersEdit', numLayersEdit, ...
         'ffDimEdit', ffDimEdit, 'dropoutEdit', dropoutEdit, 'schedulerDD', schedulerDD, 'warmupEdit', warmupEdit, ...
         'modeDD', modeDD, 'hpoTrialsLabel', hpoTrialsLabel, 'hpoTrialsEdit', hpoTrialsEdit, ...
@@ -253,6 +314,7 @@ function createUIFigure()
         'gpusEdit', gpusEdit, 'cpusEdit', cpusEdit, 'timeEdit', timeEdit, ...
         'clusterDataEdit', clusterDataEdit, 'setupEdit', setupEdit, ...
         'statusLabel', statusLabel, 'runBtn', runBtn, 'genBtn', genBtn, ...
+        'resultsDirEdit', resultsDirEdit, 'runAnalysisBtn', runAnalysisBtn, ...
         'dataInfo', struct());
     
     % Decision tree: show HPO options only when HPO mode selected
@@ -281,7 +343,7 @@ function updateTargetDependentUI(fig)
             ud.(f{1}).Visible = vis;
         end
     end
-    % Populate class dropdowns from target column values
+    % Populate class dropdowns from target column unique values
     if isfield(info, 'column_values') && isfield(info.column_values, targetCol)
         vals = info.column_values.(targetCol);
         if isnumeric(vals), vals = arrayfun(@num2str, vals, 'UniformOutput', false); end
@@ -296,13 +358,45 @@ function updateTargetDependentUI(fig)
             if numel(vals) >= 2, ud.class2DD.Value = vals{2}; else, ud.class2DD.Value = vals{1}; end
         end
     end
-    % Show/hide phase filter when target is phase
-    vis = iif(strcmp(targetCol, 'phase'), 'off', 'on');
-    if isfield(ud, 'phaseFilterEdit') && isvalid(ud.phaseFilterEdit)
-        ud.phaseFilterEdit.Visible = vis;
-    end
-    if isfield(ud, 'phaseFilterLabel') && isvalid(ud.phaseFilterLabel)
-        ud.phaseFilterLabel.Visible = vis;
+    updateFilterUI(fig);
+end
+
+function updateFilterUI(fig)
+    % Show/hide filter rows based on remaining columns (exclude target); default "all"
+    if ~isfield(fig.UserData, 'dataInfo') || isempty(fig.UserData.dataInfo), return; end
+    ud = fig.UserData;
+    info = ud.dataInfo;
+    targetCol = ud.targetColDD.Value;
+    colNames = info.column_names;
+    filterCols = {'stim', 'response', 'phase', 'mouse'};
+    filterMap = struct('stim', {{'filterStimLbl','filterStimEdit'}}, ...
+        'response', {{'filterRespLbl','filterRespEdit'}}, ...
+        'phase', {{'filterPhaseLbl','filterPhaseEdit'}}, ...
+        'mouse', {{'filterMouseLbl','filterMouseEdit'}});
+    for k = 1:numel(filterCols)
+        col = filterCols{k};
+        show = ismember(col, colNames) && ~strcmp(col, targetCol);
+        vis = iif(show, 'on', 'off');
+        for f = filterMap.(col)
+            if isfield(ud, f{1}) && isvalid(ud.(f{1}))
+                ud.(f{1}).Visible = vis;
+            end
+        end
+        % Default "all" = full list of unique values for this column
+        if show && isfield(info, 'column_values') && isfield(info.column_values, col)
+            editName = filterMap.(col){2};
+            if isfield(ud, editName) && isvalid(ud.(editName))
+                vals = info.column_values.(col);
+                if isnumeric(vals)
+                    defaultVal = strjoin(arrayfun(@num2str, vals, 'UniformOutput', false), ', ');
+                elseif iscell(vals)
+                    defaultVal = strjoin(vals, ', ');
+                else
+                    defaultVal = 'all';
+                end
+                ud.(editName).Value = defaultVal;
+            end
+        end
     end
 end
 
@@ -319,6 +413,63 @@ end
 
 function out = iif(cond, a, b)
     if cond, out = a; else, out = b; end
+end
+
+function filtersJson = buildFiltersJson(ud)
+    % Build filters JSON from visible filter edits. "all" or empty = use all column values.
+    filtersCell = {};
+    filterCols = {'stim', 'response', 'phase', 'mouse'};
+    filterEditMap = struct('stim', 'filterStimEdit', 'response', 'filterRespEdit', ...
+        'phase', 'filterPhaseEdit', 'mouse', 'filterMouseEdit');
+    info = [];
+    if isfield(ud, 'dataInfo') && ~isempty(ud.dataInfo)
+        info = ud.dataInfo;
+    end
+    for k = 1:numel(filterCols)
+        col = filterCols{k};
+        editName = filterEditMap.(col);
+        if ~isfield(ud, editName) || ~isvalid(ud.(editName)) || strcmp(ud.(editName).Visible, 'off')
+            continue;
+        end
+        v = strtrim(ud.(editName).Value);
+        if isempty(v) || strcmpi(v, 'all')
+            if ~isempty(info) && isfield(info, 'column_values') && isfield(info.column_values, col)
+                vals = info.column_values.(col);
+            else
+                % Fallback defaults
+                if ismember(col, {'stim'}), vals = 1; elseif ismember(col, {'response'}), vals = [0 1];
+                else, vals = {'early','mid','late'}; end
+            end
+        else
+            parts = strsplit(v, ',');
+            parts = cellfun(@(p) strtrim(p), parts, 'UniformOutput', false);
+            parts = parts(~cellfun(@isempty, parts));
+            if ismember(col, {'stim', 'response'})
+                vals = cellfun(@(p) str2double(p), parts, 'UniformOutput', false);
+                bad = cellfun(@(x) isnan(x), vals);
+                vals(bad) = [];
+                vals = [vals{:}];
+            else
+                vals = parts;
+            end
+        end
+        if isnumeric(vals)
+            if isempty(vals), vals = 1; end
+            valStr = strjoin(arrayfun(@num2str, vals, 'UniformOutput', false), ',');
+            filtersCell{end+1} = sprintf('"%s":[%s]', col, valStr);
+        else
+            if ischar(vals), vals = {vals}; end
+            if ~iscell(vals), vals = cellstr(string(vals)); end
+            if isempty(vals), vals = {'all'}; end
+            valStr = strjoin(cellfun(@(x) sprintf('"%s"', x), vals, 'UniformOutput', false), ',');
+            filtersCell{end+1} = sprintf('"%s":[%s]', col, valStr);
+        end
+    end
+    if isempty(filtersCell)
+        filtersJson = '{}';
+    else
+        filtersJson = ['{' strjoin(filtersCell, ',') '}'];
+    end
 end
 
 function setStatus(lbl, txt)
@@ -394,6 +545,17 @@ function validateDataset(pathField, summaryLabel)
         summaryLabel.FontColor = [0.1 0.5 0.2];
 
         fig.UserData.dataInfo = info;
+        % Show config panels now that data is loaded
+        if isfield(fig.UserData, 'configPanels')
+            for k = 1:numel(fig.UserData.configPanels)
+                if isvalid(fig.UserData.configPanels{k})
+                    fig.UserData.configPanels{k}.Visible = 'on';
+                end
+            end
+        end
+        if isfield(fig.UserData, 'mainGrid') && isvalid(fig.UserData.mainGrid)
+            fig.UserData.mainGrid.RowHeight = {42, 115, 130, 200, 40, '1x', '1x', 28};
+        end
         if isfield(fig.UserData, 'tokenInfoLabel')
             rp = 1; tp = 1;
             if isfield(fig.UserData, 'regionPoolDD') && isvalid(fig.UserData.regionPoolDD)
@@ -434,21 +596,6 @@ function validateDataset(pathField, summaryLabel)
             end
         end
         updateTargetDependentUI(fig);
-        if isfield(fig.UserData, 'phaseFilterEdit') && isfield(info, 'column_values') && isfield(info.column_values, 'phase')
-            pv = info.column_values.phase;
-            if iscell(pv), pv = strjoin(pv, ', '); elseif isnumeric(pv), pv = strjoin(arrayfun(@num2str, pv, 'UniformOutput', false), ', '); end
-            fig.UserData.phaseFilterEdit.Value = pv;
-        end
-        if isfield(fig.UserData, 'stimEdit') && isfield(info, 'column_values') && isfield(info.column_values, 'stim')
-            fig.UserData.stimEdit.Value = strjoin(arrayfun(@num2str, info.column_values.stim, 'UniformOutput', false), ', ');
-        elseif isfield(fig.UserData, 'stimEdit') && isfield(info, 'stim_values') && ~isempty(info.stim_values)
-            fig.UserData.stimEdit.Value = strjoin(arrayfun(@num2str, info.stim_values, 'UniformOutput', false), ', ');
-        end
-        if isfield(fig.UserData, 'responseEdit') && isfield(info, 'column_values') && isfield(info.column_values, 'response')
-            fig.UserData.responseEdit.Value = strjoin(arrayfun(@num2str, info.column_values.response, 'UniformOutput', false), ', ');
-        elseif isfield(fig.UserData, 'responseEdit') && isfield(info, 'response_values') && ~isempty(info.response_values)
-            fig.UserData.responseEdit.Value = strjoin(arrayfun(@num2str, info.response_values, 'UniformOutput', false), ', ');
-        end
 
         fig.UserData.statusLabel.Text = 'Data loaded. Select conditions and run.';
         showAlert(fig, msg, 'Data loaded');
@@ -482,8 +629,6 @@ function runTraining(fig)
     targetCol = ud.targetColDD.Value;
     dataType = strsplit(ud.dataTypeDD.Value, ' ');
     dataType = dataType{1};
-    stimStr = strrep(strtrim(ud.stimEdit.Value), ' ', '');
-    respStr = strrep(strtrim(ud.responseEdit.Value), ' ', '');
     condArgs = sprintf('--task_mode %s --target_column %s', taskModeArg, targetCol);
     if taskMode
         isMulticlass = strcmp(ud.classTypeDD.Value, 'Multiclass (all values)');
@@ -493,16 +638,7 @@ function runTraining(fig)
             condArgs = [condArgs sprintf(' --target_values %s,%s', c1, c2)];
         end
     end
-    filtersCell = {sprintf('"stim":[%s]', stimStr), sprintf('"response":[%s]', respStr)};
-    if ~strcmp(targetCol, 'phase') && isfield(ud, 'phaseFilterEdit') && strcmp(ud.phaseFilterEdit.Visible, 'on')
-        phaseStr = strtrim(ud.phaseFilterEdit.Value);
-        if ~isempty(phaseStr)
-            phaseParts = strsplit(phaseStr, ',');
-            phaseParts = cellfun(@(p) sprintf('"%s"', strtrim(p)), phaseParts, 'UniformOutput', false);
-            filtersCell{end+1} = sprintf('"phase":[%s]', strjoin(phaseParts, ','));
-        end
-    end
-    filtersJson = ['{' strjoin(filtersCell, ',') '}'];
+    filtersJson = buildFiltersJson(ud);
     condArgs = [condArgs ' --filters ''' filtersJson ''''];
     
     projectRoot = fileparts(fileparts(mfilename('fullpath')));
@@ -516,6 +652,18 @@ function runTraining(fig)
     rp = parsePoolValue(ud.regionPoolDD.Value);
     tp = parsePoolValue(ud.timePoolDD.Value);
     poolArgs = sprintf('--region_pool %d --time_pool %d', rp, tp);
+    if isfield(ud, 'timepointsEdit') && isvalid(ud.timepointsEdit)
+        tpVal = strtrim(ud.timepointsEdit.Value);
+        if ~isempty(tpVal) && ~strcmpi(tpVal, 'all')
+            poolArgs = [poolArgs sprintf(' --timepoint_indices %s', tpVal)];
+        end
+    end
+    if isfield(ud, 'excludeRegionsEdit') && isvalid(ud.excludeRegionsEdit)
+        exclVal = strtrim(ud.excludeRegionsEdit.Value);
+        if ~isempty(exclVal) && ~strcmpi(exclVal, 'none')
+            poolArgs = [poolArgs sprintf(' --exclude_brain_regions %s', exclVal)];
+        end
+    end
     if useHpo
         cmd = sprintf(['python "%s" --data_path "%s" --data_type %s %s %s ' ...
             '--n_trials %d --max_epochs %d --val_split %.2f --seed %d --out_dir %s'], ...
@@ -526,12 +674,19 @@ function runTraining(fig)
         cmd = sprintf(['python "%s" --data_path "%s" --data_type %s %s %s ' ...
         '--batch_size %d --epochs %d --learning_rate %s --weight_decay %s --val_split %.2f --seed %d ' ...
         '--hidden_dim %d --num_heads %d --num_layers %d --ff_dim %d --dropout %.2f ' ...
-        '--scheduler_type %s --warmup_epochs %d --save_dir %s'], ...
+        '--scheduler_type %s --warmup_epochs %d --gradient_clip %.2f --early_stopping_patience %d ' ...
+        '--cosine_t_0 %d --cosine_t_mult %d --cosine_eta_min %s --atlas_type %s --save_dir %s'], ...
         trainPath, dataPath, dataType, condArgs, poolArgs, ...
         ud.batchEdit.Value, ud.epochsEdit.Value, ud.lrEdit.Value, ud.weightDecayEdit.Value, ...
         ud.valSplitEdit.Value, ud.seedEdit.Value, ...
         ud.hiddenEdit.Value, ud.numHeadsEdit.Value, ud.numLayersEdit.Value, ud.ffDimEdit.Value, ud.dropoutEdit.Value, ...
-        ud.schedulerDD.Value, ud.warmupEdit.Value, ud.saveDirEdit.Value);
+        ud.schedulerDD.Value, ud.warmupEdit.Value, ...
+        iif(isfield(ud,'gradClipEdit')&&isvalid(ud.gradClipEdit),ud.gradClipEdit.Value,0.5), ...
+        iif(isfield(ud,'earlyStopEdit')&&isvalid(ud.earlyStopEdit),ud.earlyStopEdit.Value,15), ...
+        iif(isfield(ud,'cosineT0Edit')&&isvalid(ud.cosineT0Edit),ud.cosineT0Edit.Value,10), ...
+        iif(isfield(ud,'cosineTMultEdit')&&isvalid(ud.cosineTMultEdit),ud.cosineTMultEdit.Value,2), ...
+        iif(isfield(ud,'cosineEtaMinEdit')&&isvalid(ud.cosineEtaMinEdit),ud.cosineEtaMinEdit.Value,'1e-6'), ...
+        iif(isfield(ud,'atlasTypeDD')&&isvalid(ud.atlasTypeDD),ud.atlasTypeDD.Value,'grid'), ud.saveDirEdit.Value);
     end
 
     ud.statusLabel.Text = 'Starting training...';
@@ -545,6 +700,41 @@ function runTraining(fig)
     else
         ud.statusLabel.Text = 'Training failed. See command window.';
         showAlert(fig, sprintf('Training failed:\n%s', result), 'Error');
+    end
+end
+
+function runAnalysis(fig)
+    if ~isvalid(fig), return; end
+    ud = fig.UserData;
+    if ~isfield(ud, 'resultsDirEdit') || ~isvalid(ud.resultsDirEdit)
+        showAlert(fig, 'Run Analysis is not available in this layout.', 'Run Analysis');
+        return;
+    end
+    resultsDir = strtrim(ud.resultsDirEdit.Value);
+    if isempty(resultsDir)
+        showAlert(fig, 'Enter a results directory path.', 'Run Analysis');
+        return;
+    end
+    projectRoot = fileparts(fileparts(mfilename('fullpath')));
+    resultsPath = resultsDir;
+    if ~contains(resultsPath, filesep) || ~exist(resultsPath, 'dir')
+        resultsPath = fullfile(projectRoot, resultsDir);
+    end
+    if exist(resultsPath, 'dir') ~= 7
+        showAlert(fig, sprintf('Results directory not found: %s', resultsPath), 'Run Analysis');
+        return;
+    end
+    atlasType = iif(isfield(ud,'atlasTypeDD')&&isvalid(ud.atlasTypeDD), ud.atlasTypeDD.Value, 'grid');
+    cmd = sprintf('python analyze_results.py --results_dir "%s" --atlas_type %s', resultsPath, atlasType);
+    ud.statusLabel.Text = 'Running analysis...';
+    drawnow;
+    [status, result] = system(sprintf('cd "%s" && %s', projectRoot, cmd));
+    if status == 0
+        ud.statusLabel.Text = 'Analysis complete.';
+        showAlert(fig, sprintf('Analysis complete. Outputs saved to:\n%s', resultsPath), 'Run Analysis');
+    else
+        ud.statusLabel.Text = 'Analysis failed.';
+        showAlert(fig, sprintf('Analysis failed:\n%s', result), 'Error');
     end
 end
 
@@ -564,8 +754,6 @@ function generateScript(fig)
     targetCol = iif(isfield(ud, 'targetColDD') && isvalid(ud.targetColDD), ud.targetColDD.Value, 'phase');
     dataType = strsplit(ud.dataTypeDD.Value, ' ');
     dataType = dataType{1};
-    stimStr = strrep(strtrim(ud.stimEdit.Value), ' ', '');
-    respStr = strrep(strtrim(ud.responseEdit.Value), ' ', '');
     condArgs = sprintf('--task_mode %s --target_column %s', taskModeArg, targetCol);
     if taskMode
         isMulticlass = strcmp(ud.classTypeDD.Value, 'Multiclass (all values)');
@@ -575,16 +763,7 @@ function generateScript(fig)
             condArgs = [condArgs sprintf(' --target_values %s,%s', c1, c2)];
         end
     end
-    filtersCell = {sprintf('"stim":[%s]', stimStr), sprintf('"response":[%s]', respStr)};
-    if ~strcmp(targetCol, 'phase') && isfield(ud, 'phaseFilterEdit') && strcmp(ud.phaseFilterEdit.Visible, 'on')
-        phaseStr = strtrim(ud.phaseFilterEdit.Value);
-        if ~isempty(phaseStr)
-            phaseParts = strsplit(phaseStr, ',');
-            phaseParts = cellfun(@(p) sprintf('"%s"', strtrim(p)), phaseParts, 'UniformOutput', false);
-            filtersCell{end+1} = sprintf('"phase":[%s]', strjoin(phaseParts, ','));
-        end
-    end
-    filtersJson = ['{' strjoin(filtersCell, ',') '}'];
+    filtersJson = buildFiltersJson(ud);
     condArgs = [condArgs ' --filters ''' filtersJson ''''];
     
     clusterDataPath = strtrim(ud.clusterDataEdit.Value);
@@ -619,6 +798,18 @@ function generateScript(fig)
     rp = parsePoolValue(ud.regionPoolDD.Value);
     tp = parsePoolValue(ud.timePoolDD.Value);
     poolArgs = sprintf('--region_pool %d --time_pool %d', rp, tp);
+    if isfield(ud, 'timepointsEdit') && isvalid(ud.timepointsEdit)
+        tpVal = strtrim(ud.timepointsEdit.Value);
+        if ~isempty(tpVal) && ~strcmpi(tpVal, 'all')
+            poolArgs = [poolArgs sprintf(' --timepoint_indices %s', tpVal)];
+        end
+    end
+    if isfield(ud, 'excludeRegionsEdit') && isvalid(ud.excludeRegionsEdit)
+        exclVal = strtrim(ud.excludeRegionsEdit.Value);
+        if ~isempty(exclVal) && ~strcmpi(exclVal, 'none')
+            poolArgs = [poolArgs sprintf(' --exclude_brain_regions %s', exclVal)];
+        end
+    end
 
     if useHpo
         nTrials = ud.hpoTrialsEdit.Value;
@@ -638,11 +829,18 @@ function generateScript(fig)
         cmd = sprintf(['python train.py --data_path "%s" --data_type %s %s %s ' ...
             '--batch_size %d --epochs %d --learning_rate %s --weight_decay %s --val_split %.2f --seed %d ' ...
             '--hidden_dim %d --num_heads %d --num_layers %d --ff_dim %d --dropout %.2f ' ...
-            '--scheduler_type %s --warmup_epochs %d --save_dir %s'], ...
+        '--scheduler_type %s --warmup_epochs %d --gradient_clip %.2f --early_stopping_patience %d ' ...
+        '--cosine_t_0 %d --cosine_t_mult %d --cosine_eta_min %s --atlas_type %s --save_dir %s'], ...
             clusterDataPath, dataType, condArgs, poolArgs, ...
             batchSize, epochs, lr, weightDecay, valSplit, seed, ...
             hiddenDim, numHeads, numLayers, ffDim, dropout, ...
-            scheduler, warmup, saveDir);
+            scheduler, warmup, ...
+            iif(isfield(ud,'gradClipEdit')&&isvalid(ud.gradClipEdit),ud.gradClipEdit.Value,0.5), ...
+            iif(isfield(ud,'earlyStopEdit')&&isvalid(ud.earlyStopEdit),ud.earlyStopEdit.Value,15), ...
+            iif(isfield(ud,'cosineT0Edit')&&isvalid(ud.cosineT0Edit),ud.cosineT0Edit.Value,10), ...
+            iif(isfield(ud,'cosineTMultEdit')&&isvalid(ud.cosineTMultEdit),ud.cosineTMultEdit.Value,2), ...
+            iif(isfield(ud,'cosineEtaMinEdit')&&isvalid(ud.cosineEtaMinEdit),ud.cosineEtaMinEdit.Value,'1e-6'), ...
+            iif(isfield(ud,'atlasTypeDD')&&isvalid(ud.atlasTypeDD),ud.atlasTypeDD.Value,'grid'), saveDir);
     end
     
     if exist(outDir, 'dir') ~= 7, mkdir(outDir); end
@@ -696,7 +894,13 @@ function generateScript(fig)
     else
         fprintf(fid, 'Batch: %d Epochs: %d LR: %s Weight decay: %s\n', batchSize, epochs, lr, weightDecay);
         fprintf(fid, 'Model: hidden=%d heads=%d layers=%d ff=%d dropout=%.2f\n', hiddenDim, numHeads, numLayers, ffDim, dropout);
-        fprintf(fid, 'Scheduler: %s warmup=%d\n', scheduler, warmup);
+        fprintf(fid, 'Scheduler: %s warmup=%d grad_clip=%.2f early_stop=%d cosine_t0=%d t_mult=%d eta_min=%s\n', ...
+            scheduler, warmup, ...
+            iif(isfield(ud,'gradClipEdit')&&isvalid(ud.gradClipEdit),ud.gradClipEdit.Value,0.5), ...
+            iif(isfield(ud,'earlyStopEdit')&&isvalid(ud.earlyStopEdit),ud.earlyStopEdit.Value,15), ...
+            iif(isfield(ud,'cosineT0Edit')&&isvalid(ud.cosineT0Edit),ud.cosineT0Edit.Value,10), ...
+            iif(isfield(ud,'cosineTMultEdit')&&isvalid(ud.cosineTMultEdit),ud.cosineTMultEdit.Value,2), ...
+            iif(isfield(ud,'cosineEtaMinEdit')&&isvalid(ud.cosineEtaMinEdit),ud.cosineEtaMinEdit.Value,'1e-6'));
     end
     fprintf(fid, 'Tokenization: region_pool=%d time_pool=%d\n', rp, tp);
     fprintf(fid, '\nLocal: %s\nCluster: sbatch %s\n', cmd, slurmPath);
@@ -735,6 +939,12 @@ function createUIFigureLegacy()
     fig.UserData.layoutPanels = struct('header', headerPanel, 'p1', p1, 'p2', p2, 'p3', p3, ...
         'mode', modePanel, 'p4', p4, 'p5', p5, 'p6', p6, 'action', actionPanel, 'status', statusPanel);
 
+    % Hide config panels until data is loaded
+    configPanels = {p2, p3, modePanel, p4, p5, p6, actionPanel};
+    for k = 1:numel(configPanels)
+        configPanels{k}.Visible = 'off';
+    end
+
     % Panel 1
     uilabel(p1, 'Text', 'Dataset (.mat):', 'Position', [15 78 100 22]);
     pathField = uieditfield(p1, 'text', 'Position', [120 75 400 28], 'Value', '');
@@ -751,6 +961,10 @@ function createUIFigureLegacy()
     regionPoolDD = uidropdown(p2, 'Position', [100 55 80 28], 'Items', {'None (1)', '2 (avg pairs)', '4', '8'}, 'Value', 'None (1)');
     uilabel(p2, 'Text', 'Time pool:', 'Position', [195 58 70 22]);
     timePoolDD = uidropdown(p2, 'Position', [270 55 80 28], 'Items', {'None (1)', '2 (avg pairs)', '4', '8'}, 'Value', 'None (1)');
+    uilabel(p2, 'Text', 'Timepoints:', 'Position', [15 25 75 22]);
+    timepointsEdit = uieditfield(p2, 'text', 'Position', [95 22 80 28], 'Value', 'all');
+    uilabel(p2, 'Text', 'Exclude regions:', 'Position', [185 25 90 22]);
+    excludeRegionsEdit = uieditfield(p2, 'text', 'Position', [280 22 70 28], 'Value', 'none');
     uilabel(p2, 'Text', 'Tokenization:', 'Position', [15 18 90 22]);
     tokenInfoLabel = uilabel(p2, 'Text', 'Load data to see tokenization.', 'Position', [110 15 450 28], 'FontColor', [0.45 0.45 0.45]);
 
@@ -765,14 +979,16 @@ function createUIFigureLegacy()
     class1DD = uidropdown(p3, 'Position', [290 85 85 28], 'Items', {'early', 'mid', 'late'}, 'Value', 'early');
     class2Label = uilabel(p3, 'Text', 'vs Class 2:', 'Position', [385 88 65 22]);
     class2DD = uidropdown(p3, 'Position', [455 85 85 28], 'Items', {'early', 'mid', 'late'}, 'Value', 'late');
-    uilabel(p3, 'Text', 'Filter stim:', 'Position', [15 48 70 22]);
-    stimEdit = uieditfield(p3, 'text', 'Position', [90 45 55 28], 'Value', '1');
-    uilabel(p3, 'Text', 'Filter response:', 'Position', [155 48 85 22]);
-    responseEdit = uieditfield(p3, 'text', 'Position', [245 45 65 28], 'Value', '0, 1');
-    phaseFilterLabel = uilabel(p3, 'Text', 'Filter phase:', 'Position', [325 48 75 22]);
-    phaseFilterEdit = uieditfield(p3, 'text', 'Position', [405 45 80 28], 'Value', 'early, mid, late');
-    uilabel(p3, 'Text', 'Seed:', 'Position', [500 48 40 22]);
-    seedEdit = uieditfield(p3, 'numeric', 'Position', [545 45 55 28], 'Value', 42);
+    filterStimLbl = uilabel(p3, 'Text', 'Filter stim:', 'Position', [15 48 70 22]);
+    filterStimEdit = uieditfield(p3, 'text', 'Position', [90 45 55 28], 'Value', 'all');
+    filterRespLbl = uilabel(p3, 'Text', 'Filter response:', 'Position', [155 48 85 22]);
+    filterRespEdit = uieditfield(p3, 'text', 'Position', [245 45 65 28], 'Value', 'all');
+    filterPhaseLbl = uilabel(p3, 'Text', 'Filter phase:', 'Position', [325 48 75 22]);
+    filterPhaseEdit = uieditfield(p3, 'text', 'Position', [405 45 80 28], 'Value', 'all');
+    filterMouseLbl = uilabel(p3, 'Text', 'Filter mouse:', 'Position', [325 18 75 22]);
+    filterMouseEdit = uieditfield(p3, 'text', 'Position', [405 15 80 28], 'Value', 'all');
+    uilabel(p3, 'Text', 'Seed:', 'Position', [500 18 40 22]);
+    seedEdit = uieditfield(p3, 'numeric', 'Position', [545 15 55 28], 'Value', 42);
 
     % Mode row
     uilabel(modePanel, 'Text', 'Mode:', 'Position', [15 5 50 22]);
@@ -800,6 +1016,13 @@ function createUIFigureLegacy()
     valSplitEdit = uieditfield(p4, 'numeric', 'Position', [75 39 45 28], 'Value', 0.2, 'Limits', [0 1]);
     uilabel(p4, 'Text', 'Save dir:', 'Position', [125 42 58 22]);
     saveDirEdit = uieditfield(p4, 'text', 'Position', [188 39 220 28], 'Value', 'results');
+    uilabel(p4, 'Text', 'Grad clip:', 'Position', [15 25 55 22]);
+    gradClipEdit = uieditfield(p4, 'numeric', 'Position', [75 22 35 28], 'Value', 0.5);
+    uilabel(p4, 'Text', 'Early stop:', 'Position', [115 25 60 22]);
+    earlyStopEdit = uieditfield(p4, 'numeric', 'Position', [180 22 35 28], 'Value', 15);
+    cosineT0Edit = uieditfield(p4, 'numeric', 'Position', [220 22 30 28], 'Value', 10);
+    cosineTMultEdit = uieditfield(p4, 'numeric', 'Position', [255 22 30 28], 'Value', 2);
+    cosineEtaMinEdit = uieditfield(p4, 'text', 'Position', [290 22 45 28], 'Value', '1e-6');
     uilabel(p4, 'Text', 'Output dir:', 'Position', [15 8 70 22]);
     outputDirEdit = uieditfield(p4, 'text', 'Position', [90 5 318 28], 'Value', fullfile(fileparts(fileparts(mfilename('fullpath'))), 'generated_scripts'));
 
@@ -817,6 +1040,8 @@ function createUIFigureLegacy()
     schedulerDD = uidropdown(p5, 'Position', [82 5 110 28], 'Items', {'cosine_warmup', 'cosine', 'reduce_on_plateau', 'step'}, 'Value', 'cosine_warmup');
     uilabel(p5, 'Text', 'Warmup:', 'Position', [197 8 50 22]);
     warmupEdit = uieditfield(p5, 'numeric', 'Position', [252 5 28 28], 'Value', 5);
+    uilabel(p5, 'Text', 'Atlas:', 'Position', [285 8 35 22]);
+    atlasTypeDD = uidropdown(p5, 'Position', [325 5 60 28], 'Items', {'grid', 'allen'}, 'Value', 'grid');
 
     uilabel(p6, 'Text', 'Partition:', 'Position', [15 72 48 22]);
     partitionEdit = uieditfield(p6, 'text', 'Position', [66 69 50 28], 'Value', 'gpu');
@@ -834,25 +1059,40 @@ function createUIFigureLegacy()
     clusterOutEdit = uieditfield(p6, 'text', 'Position', [135 9 275 28], 'Value', '');
     uilabel(p6, 'Text', 'Setup (conda activate, etc.):', 'Position', [15 2 155 22]);
     setupEdit = uieditfield(p6, 'text', 'Position', [170 2 240 22], 'Value', '');
-    runBtn = uibutton(actionPanel, 'Text', 'Run Training Now', 'Position', [15 65 250 40], 'BackgroundColor', [0.25 0.55 0.35], ...
+    uilabel(actionPanel, 'Text', 'Results dir:', 'Position', [15 95 70 22]);
+    resultsDirEdit = uieditfield(actionPanel, 'text', 'Position', [90 92 175 28], 'Value', 'results');
+    runBtn = uibutton(actionPanel, 'Text', 'Run Training Now', 'Position', [15 55 250 35], 'BackgroundColor', [0.25 0.55 0.35], ...
         'FontColor', [1 1 1], 'FontSize', 12, 'FontWeight', 'bold', 'ButtonPushedFcn', @(src,~) runTraining(fig));
-    genBtn = uibutton(actionPanel, 'Text', 'Generate Cluster Script', 'Position', [15 15 250 38], 'BackgroundColor', [0.28 0.52 0.8], ...
+    runAnalysisBtn = uibutton(actionPanel, 'Text', 'Run Analysis', 'Position', [15 15 120 28], 'BackgroundColor', [0.6 0.4 0.2], ...
+        'FontColor', [1 1 1], 'ButtonPushedFcn', @(src,~) runAnalysis(fig));
+    genBtn = uibutton(actionPanel, 'Text', 'Generate Cluster Script', 'Position', [145 15 120 28], 'BackgroundColor', [0.28 0.52 0.8], ...
         'FontColor', [1 1 1], 'FontWeight', 'bold', 'ButtonPushedFcn', @(src,~) generateScript(fig));
     statusLabel = uilabel(statusPanel, 'Text', 'Ready. Load a dataset to begin.', 'Position', [10 4 600 20], 'FontColor', [0.45 0.45 0.45], 'FontSize', 10);
 
     lp = fig.UserData.layoutPanels;
     fig.UserData = struct('pathField', pathField, 'summaryLabel', summaryLabel, 'layoutPanels', lp, ...
+        'configPanels', {configPanels}, ...
         'dataTypeDD', dataTypeDD, 'normDD', normDD, 'tokenInfoLabel', tokenInfoLabel, 'regionPoolDD', regionPoolDD, 'timePoolDD', timePoolDD, ...
         'taskModeDD', taskModeDD, 'targetColDD', targetColDD, 'classTypeDD', classTypeDD, 'class1Label', class1Label, 'class1DD', class1DD, ...
-        'class2Label', class2Label, 'class2DD', class2DD, 'phaseFilterLabel', phaseFilterLabel, 'phaseFilterEdit', phaseFilterEdit, ...
-        'stimEdit', stimEdit, 'responseEdit', responseEdit, 'seedEdit', seedEdit, 'batchEdit', batchEdit, 'epochsEdit', epochsEdit, ...
+        'class2Label', class2Label, 'class2DD', class2DD, ...
+        'filterStimLbl', filterStimLbl, 'filterStimEdit', filterStimEdit, ...
+        'filterRespLbl', filterRespLbl, 'filterRespEdit', filterRespEdit, ...
+        'filterPhaseLbl', filterPhaseLbl, 'filterPhaseEdit', filterPhaseEdit, ...
+        'filterMouseLbl', filterMouseLbl, 'filterMouseEdit', filterMouseEdit, ...
+        'seedEdit', seedEdit, 'batchEdit', batchEdit, 'epochsEdit', epochsEdit, ...
         'lrEdit', lrEdit, 'weightDecayEdit', weightDecayEdit, 'valSplitEdit', valSplitEdit, 'saveDirEdit', saveDirEdit, ...
         'hiddenEdit', hiddenEdit, 'numHeadsEdit', numHeadsEdit, 'numLayersEdit', numLayersEdit, 'ffDimEdit', ffDimEdit, ...
         'dropoutEdit', dropoutEdit, 'schedulerDD', schedulerDD, 'warmupEdit', warmupEdit, 'outputDirEdit', outputDirEdit, ...
+        'timepointsEdit', timepointsEdit, 'excludeRegionsEdit', excludeRegionsEdit, ...
+        'gradClipEdit', gradClipEdit, 'earlyStopEdit', earlyStopEdit, ...
+        'cosineT0Edit', cosineT0Edit, 'cosineTMultEdit', cosineTMultEdit, 'cosineEtaMinEdit', cosineEtaMinEdit, ...
+        'atlasTypeDD', atlasTypeDD, ...
         'modeDD', modeDD, 'hpoTrialsLabel', hpoTrialsLabel, 'hpoTrialsEdit', hpoTrialsEdit, 'hpoEpochsLabel', hpoEpochsLabel, 'hpoEpochsEdit', hpoEpochsEdit, ...
         'clusterOutLabel', clusterOutLabel, 'clusterOutEdit', clusterOutEdit, 'partitionEdit', partitionEdit, 'memEdit', memEdit, ...
         'gpusEdit', gpusEdit, 'cpusEdit', cpusEdit, 'timeEdit', timeEdit, 'clusterDataEdit', clusterDataEdit, 'setupEdit', setupEdit, ...
-        'statusLabel', statusLabel, 'runBtn', runBtn, 'genBtn', genBtn, 'dataInfo', struct());
+        'statusLabel', statusLabel, 'runBtn', runBtn, 'genBtn', genBtn, ...
+        'resultsDirEdit', resultsDirEdit, 'runAnalysisBtn', runAnalysisBtn, ...
+        'dataInfo', struct());
 
     modeDD.ValueChangedFcn = @(src,~) updateModeDependentUI(fig);
     updateModeDependentUI(fig);

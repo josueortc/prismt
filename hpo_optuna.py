@@ -37,6 +37,7 @@ from train import (
 )
 from utils.helpers import set_seed, get_device
 from training.trainer import run_attention_and_diagnosis
+from evaluation.visualization import create_comprehensive_report
 
 logger = logging.getLogger(__name__)
 
@@ -364,6 +365,8 @@ def main():
         "--attention_samples", type=int, default=1000,
         help="Number of samples for attention extraction (post-HPO)"
     )
+    parser.add_argument("--atlas_type", type=str, default="grid", choices=["grid", "allen"],
+                        help="Atlas type for brain map visualization")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -489,13 +492,27 @@ def main():
             target_values=target_values,
             filters=filters,
         )
-        run_attention_and_diagnosis(
+        diagnosis, attention_matrix, _ = run_attention_and_diagnosis(
             model=best_model,
             data_loader=val_loader_hpo,
             device=device,
             save_dir=args.out_dir,
             num_samples=args.attention_samples,
             num_classes=2,
+        )
+        phase1 = args.phase1 if args.phase1 is not None else "early"
+        phase2 = args.phase2 if args.phase2 is not None else "late"
+        create_comprehensive_report(
+            attention_matrix=attention_matrix,
+            save_dir=args.out_dir,
+            history=None,
+            model=best_model,
+            diagnosis=diagnosis,
+            task_name=task_type,
+            phase1=phase1,
+            phase2=phase2,
+            stim_value=1,
+            atlas_type=args.atlas_type,
         )
     else:
         logger.warning("Best checkpoint not found; skipping attention and diagnosis.")

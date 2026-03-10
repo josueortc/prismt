@@ -35,6 +35,9 @@ ENV/
 # Jupyter
 .ipynb_checkpoints/
 
+# Generated scripts (GUI output)
+generated_scripts/
+
 # Results and checkpoints
 results/
 checkpoints/
@@ -47,6 +50,7 @@ logs/
 
 # Data files (large)
 *.mat
+*.npy
 !**/test_data/*.mat
 
 # OS
