@@ -115,6 +115,8 @@ Select **HPO (Optuna)** in the Mode dropdown to run Optuna-based hyperparameter 
 - Saves best checkpoint and `best_summary.json` to the output directory
 - Run: `python hpo_optuna.py --data_path ... --phase1 early --phase2 late --n_trials 30`
 
+See [scripts/run_optuna_cluster.sh](scripts/run_optuna_cluster.sh) for a minimal SLURM script (conda env setup, single GPU, quick trials). For a didactic explanation of each hyperparameter, see the [wiki Hyperparameter Guide](https://github.com/josueortc/prismt/wiki/Hyperparameter-Guide).
+
 ### Common Format Errors and Fixes
 
 | Error | Cause | Fix |
