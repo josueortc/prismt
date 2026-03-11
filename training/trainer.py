@@ -16,7 +16,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import wandb
 
-from models.transformer import WidefieldTransformer
+from models.transformer import PRISMTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ class Trainer:
     
     def __init__(
         self,
-        model: WidefieldTransformer,
+        model: PRISMTransformer,
         train_loader: DataLoader,
         val_loader: DataLoader,
         device: torch.device,
@@ -147,7 +147,7 @@ class Trainer:
         Initialize the trainer.
         
         Args:
-            model: WidefieldTransformer model
+            model: PRISMTransformer model
             train_loader: Training data loader
             val_loader: Validation data loader
             device: Device to train on
@@ -648,7 +648,7 @@ class Trainer:
             'val_f1_scores': self.val_f1_scores
         }
     
-    def get_best_model(self) -> WidefieldTransformer:
+    def get_best_model(self) -> PRISMTransformer:
         """
         Load and return the best model.
         
@@ -660,7 +660,7 @@ class Trainer:
             return self.model
         
         # Create a new model instance with the same architecture as the original
-        best_model = WidefieldTransformer(
+        best_model = PRISMTransformer(
             n_brain_areas=self.model.n_brain_areas,
             time_points=self.model.time_points,
             hidden_dim=self.model.hidden_dim,
@@ -679,7 +679,7 @@ class Trainer:
         return best_model
 
 
-def compute_accuracy(model: WidefieldTransformer, data_loader: DataLoader, device: torch.device) -> float:
+def compute_accuracy(model: PRISMTransformer, data_loader: DataLoader, device: torch.device) -> float:
     """
     Compute accuracy on a dataset.
     
@@ -717,7 +717,7 @@ def compute_accuracy(model: WidefieldTransformer, data_loader: DataLoader, devic
 
 
 def extract_attention_rollout(
-    model: WidefieldTransformer,
+    model: PRISMTransformer,
     data_loader: DataLoader,
     device: torch.device,
     num_samples: int = 1000,
@@ -869,7 +869,7 @@ def extract_attention_rollout(
 
 
 def run_diagnosis(
-    model: WidefieldTransformer,
+    model: PRISMTransformer,
     data_loader: DataLoader,
     device: torch.device,
     save_dir: str,
@@ -970,7 +970,7 @@ def run_diagnosis(
 
 
 def run_attention_and_diagnosis(
-    model: WidefieldTransformer,
+    model: PRISMTransformer,
     data_loader: DataLoader,
     device: torch.device,
     save_dir: str,

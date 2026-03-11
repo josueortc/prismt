@@ -22,7 +22,7 @@ project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
 from evaluation.visualization import create_comprehensive_report
-from models.transformer import WidefieldTransformer
+from models.transformer import PRISMTransformer
 from utils.helpers import get_device, setup_logging
 
 logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ def _infer_model_config(state_dict: dict) -> Optional[Dict]:
 
 def load_model_and_history(
     results_dir: Path, device: torch.device
-) -> tuple[Optional[WidefieldTransformer], Optional[Dict]]:
+) -> tuple[Optional[PRISMTransformer], Optional[Dict]]:
     """Load model and training history from best_model.pt."""
     path = results_dir / "best_model.pt"
     if not path.exists():
@@ -113,7 +113,7 @@ def load_model_and_history(
         logger.warning("Could not infer model config from checkpoint")
         return None, None
 
-    model = WidefieldTransformer(
+    model = PRISMTransformer(
         n_brain_areas=cfg["n_brain_areas"],
         time_points=cfg["time_points"],
         hidden_dim=cfg["hidden_dim"],

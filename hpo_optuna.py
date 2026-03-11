@@ -2,7 +2,7 @@
 """
 PRISMT: Optuna-based Hyperparameter Optimization
 
-Runs Optuna trials over the WidefieldTransformer, reusing PRISMT data loaders
+Runs Optuna trials over the PRISMTransformer, reusing PRISMT data loaders
 and model infrastructure. Supports both phase and genotype classification.
 """
 
@@ -29,7 +29,7 @@ import sys
 sys.path.insert(0, str(project_root))
 
 from data.data_loader import WidefieldDataset, TaskDefinition, WidefieldTrialDataset
-from models.transformer import WidefieldTransformer
+from models.transformer import PRISMTransformer
 from train import (
     detect_task_type,
     create_data_loaders_unified,
@@ -256,7 +256,7 @@ def _run_trial(
         filters=filters,
     )
 
-    model = WidefieldTransformer(
+    model = PRISMTransformer(
         n_brain_areas=n_brain_areas,
         time_points=time_points,
         hidden_dim=cfg.hidden_dim,
@@ -468,7 +468,7 @@ def main():
         logger.info("Extracting attention and running diagnosis on best model...")
         best_cfg = summary.get("best_cfg", {})
         ckpt = torch.load(best_ckpt, map_location=device)
-        best_model = WidefieldTransformer(
+        best_model = PRISMTransformer(
             n_brain_areas=n_brain_areas,
             time_points=time_points,
             hidden_dim=best_cfg.get("hidden_dim", 128),

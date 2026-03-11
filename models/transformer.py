@@ -1,13 +1,15 @@
 """
-Transformer model for widefield calcium imaging classification.
+PRISMT (Pattern Reconstruction and Interpretation with a Structured Multimodal
+Transformer) classification model for widefield calcium imaging.
+Uses area-level tokenization with CausalTemporalAttention.
 """
 
 import logging
-import math
 from typing import Tuple, Optional, List
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
+from models.prismt_transformer import CausalTemporalAttention, TransformerBlock
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +45,6 @@ class TokenEmbedding(nn.Module):
         batch_size, n_areas, time_points = x.shape
         assert time_points == self.input_dim, f"Expected {self.input_dim} time points, got {time_points}"
         
-        # Project each brain area's time series to hidden dimension
-        # x: (batch_size, n_brain_areas, time_points) -> (batch_size, n_brain_areas, hidden_dim)
         embedded = self.projection(x)
         
         return embedded
@@ -82,151 +82,22 @@ class PositionalEmbedding(nn.Module):
         assert seq_len <= self.max_seq_len, f"Sequence length {seq_len} exceeds max {self.max_seq_len}"
         assert hidden_dim == self.hidden_dim, f"Hidden dim mismatch: {hidden_dim} vs {self.hidden_dim}"
         
-        # Add positional embeddings
-        pos_embeddings = self.embeddings[:seq_len, :].unsqueeze(0)  # (1, seq_len, hidden_dim)
+        pos_embeddings = self.embeddings[:seq_len, :].unsqueeze(0)
         x = x + pos_embeddings
         
         return x
 
 
-class MultiHeadAttention(nn.Module):
+class PRISMTransformer(nn.Module):
     """
-    Multi-head self-attention mechanism.
-    """
-    
-    def __init__(self, hidden_dim: int, num_heads: int, dropout: float = 0.1):
-        """
-        Initialize multi-head attention.
-        
-        Args:
-            hidden_dim: Hidden dimension size
-            num_heads: Number of attention heads
-            dropout: Dropout probability
-        """
-        super().__init__()
-        assert hidden_dim % num_heads == 0, "hidden_dim must be divisible by num_heads"
-        
-        self.hidden_dim = hidden_dim
-        self.num_heads = num_heads
-        self.head_dim = hidden_dim // num_heads
-        
-        self.query = nn.Linear(hidden_dim, hidden_dim)
-        self.key = nn.Linear(hidden_dim, hidden_dim)
-        self.value = nn.Linear(hidden_dim, hidden_dim)
-        self.output = nn.Linear(hidden_dim, hidden_dim)
-        
-        self.dropout = nn.Dropout(dropout)
-        self.scale = math.sqrt(self.head_dim)
-        
-    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Apply multi-head attention.
-        
-        Args:
-            x: Input tensor of shape (batch_size, seq_len, hidden_dim)
-            mask: Optional attention mask
-            
-        Returns:
-            Tuple of (output, attention_weights)
-        """
-        batch_size, seq_len, hidden_dim = x.shape
-        
-        # Compute Q, K, V
-        Q = self.query(x)  # (batch_size, seq_len, hidden_dim)
-        K = self.key(x)    # (batch_size, seq_len, hidden_dim)
-        V = self.value(x)  # (batch_size, seq_len, hidden_dim)
-        
-        # Reshape for multi-head attention
-        Q = Q.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        K = K.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        V = V.view(batch_size, seq_len, self.num_heads, self.head_dim).transpose(1, 2)
-        # Shape: (batch_size, num_heads, seq_len, head_dim)
-        
-        # Compute attention scores
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / self.scale
-        # Shape: (batch_size, num_heads, seq_len, seq_len)
-        
-        # Apply mask if provided
-        if mask is not None:
-            scores = scores.masked_fill(mask == 0, -1e9)
-        
-        # Apply softmax
-        attention_weights = F.softmax(scores, dim=-1)
-        attention_weights = self.dropout(attention_weights)
-        
-        # Apply attention to values
-        attended = torch.matmul(attention_weights, V)
-        # Shape: (batch_size, num_heads, seq_len, head_dim)
-        
-        # Concatenate heads
-        attended = attended.transpose(1, 2).contiguous().view(
-            batch_size, seq_len, hidden_dim
-        )
-        
-        # Final linear transformation
-        output = self.output(attended)
-        
-        # Average attention weights across heads for analysis
-        attention_weights = attention_weights.mean(dim=1)  # (batch_size, seq_len, seq_len)
-        
-        return output, attention_weights
+    PRISMT (Pattern Reconstruction and Interpretation with a Structured Multimodal
+    Transformer) classification model for widefield calcium imaging.
+    Uses area-level tokenization with CausalTemporalAttention.
+    Supports both classification and regression via task_mode.
 
-
-class TransformerBlock(nn.Module):
-    """
-    Single transformer decoder block.
-    """
-    
-    def __init__(self, hidden_dim: int, num_heads: int, ff_dim: int, dropout: float = 0.1):
-        """
-        Initialize transformer block.
-        
-        Args:
-            hidden_dim: Hidden dimension size
-            num_heads: Number of attention heads
-            ff_dim: Feed-forward dimension
-            dropout: Dropout probability
-        """
-        super().__init__()
-        
-        self.attention = MultiHeadAttention(hidden_dim, num_heads, dropout)
-        self.norm1 = nn.LayerNorm(hidden_dim)
-        
-        self.feed_forward = nn.Sequential(
-            nn.Linear(hidden_dim, ff_dim),
-            nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(ff_dim, hidden_dim),
-            nn.Dropout(dropout)
-        )
-        self.norm2 = nn.LayerNorm(hidden_dim)
-        
-    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Forward pass through transformer block.
-        
-        Args:
-            x: Input tensor of shape (batch_size, seq_len, hidden_dim)
-            mask: Optional attention mask
-            
-        Returns:
-            Tuple of (output, attention_weights)
-        """
-        # Self-attention with residual connection
-        attn_out, attention_weights = self.attention(self.norm1(x), mask)
-        x = x + attn_out
-        
-        # Feed-forward with residual connection
-        ff_out = self.feed_forward(self.norm2(x))
-        x = x + ff_out
-        
-        return x, attention_weights
-
-
-class WidefieldTransformer(nn.Module):
-    """
-    Transformer model for widefield calcium imaging.
-    Supports both classification and regression.
+    With area-level tokenization all tokens belong to a single effective
+    timepoint, so the causal mask degenerates to full bidirectional attention --
+    consistent mechanism, appropriate behaviour for classification.
     """
     
     def __init__(
@@ -242,7 +113,7 @@ class WidefieldTransformer(nn.Module):
         task_mode: str = 'classification'
     ):
         """
-        Initialize the transformer model.
+        Initialize the PRISMTransformer classification model.
         
         Args:
             n_brain_areas: Number of brain areas (after averaging)
@@ -267,32 +138,29 @@ class WidefieldTransformer(nn.Module):
         self.dropout_prob = dropout
         self.task_mode = task_mode
         
-        # Token embedding projects time series to hidden dimension
         self.token_embedding = TokenEmbedding(time_points, hidden_dim)
         
-        # CLS token
         self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_dim))
         
-        # Positional embeddings (brain areas + CLS token)
         max_seq_len = n_brain_areas + 1
         self.positional_embedding = PositionalEmbedding(max_seq_len, hidden_dim)
         
-        # Transformer layers
+        # Area-level tokenization: all tokens share a single effective timepoint
+        # (time_points=1, n_brain_areas=seq_len including CLS) so the causal mask
+        # allows full attention -- consistent with the scalar-token variant.
+        seq_len = n_brain_areas + 1
         self.transformer_layers = nn.ModuleList([
-            TransformerBlock(hidden_dim, num_heads, ff_dim, dropout)
+            TransformerBlock(hidden_dim, num_heads, ff_dim, time_points=1, n_brain_areas=seq_len, dropout=dropout)
             for _ in range(num_layers)
         ])
         
-        # Output head: classification or regression
         if task_mode == 'regression':
             self.classifier = nn.Linear(hidden_dim, 1)
         else:
             self.classifier = nn.Linear(hidden_dim, num_classes)
         
-        # Dropout
         self.dropout_layer = nn.Dropout(dropout)
         
-        # Initialize weights
         self._init_weights()
         
     def _init_weights(self) -> None:
@@ -301,7 +169,6 @@ class WidefieldTransformer(nn.Module):
             if isinstance(module, nn.Linear):
                 nn.init.xavier_uniform_(module.weight)
                 if module.bias is not None:
-                    # Initialize classifier bias to small random values to reduce initial bias
                     if module is self.classifier:
                         nn.init.uniform_(module.bias, -0.1, 0.1)
                     else:
@@ -324,35 +191,27 @@ class WidefieldTransformer(nn.Module):
         assert time_points == self.time_points, f"Expected {self.time_points} time points, got {time_points}"
         assert n_brain_areas == self.n_brain_areas, f"Expected {self.n_brain_areas} brain areas, got {n_brain_areas}"
         
-        # Transpose to (batch_size, n_brain_areas, time_points) for tokenization
         x = x.transpose(1, 2)
         
-        # Embed brain area time series as tokens
-        tokens = self.token_embedding(x)  # (batch_size, n_brain_areas, hidden_dim)
+        tokens = self.token_embedding(x)
         
-        # Add CLS token
-        cls_tokens = self.cls_token.expand(batch_size, -1, -1)  # (batch_size, 1, hidden_dim)
-        tokens = torch.cat([cls_tokens, tokens], dim=1)  # (batch_size, n_brain_areas + 1, hidden_dim)
+        cls_tokens = self.cls_token.expand(batch_size, -1, -1)
+        tokens = torch.cat([cls_tokens, tokens], dim=1)
         
-        # Add positional embeddings
         tokens = self.positional_embedding(tokens)
         
-        # Apply dropout
         tokens = self.dropout_layer(tokens)
         
-        # Pass through transformer layers
         attention_weights_list = []
         for layer in self.transformer_layers:
-            tokens, attention_weights = layer(tokens)
+            tokens, attention_weights = layer(tokens, None)
             attention_weights_list.append(attention_weights)
         
-        # Extract CLS token
-        cls_output = tokens[:, 0, :]  # (batch_size, hidden_dim)
+        cls_output = tokens[:, 0, :]
         
-        # Apply output head
-        out = self.classifier(cls_output)  # (batch_size, num_classes) or (batch_size, 1)
+        out = self.classifier(cls_output)
         if self.task_mode == 'regression':
-            out = out.squeeze(-1)  # (batch_size,)
+            out = out.squeeze(-1)
         
         return out, attention_weights_list
     
@@ -366,18 +225,14 @@ class WidefieldTransformer(nn.Module):
         Returns:
             Final attention weights from CLS token, shape (batch_size, seq_len)
         """
-        # Start with identity matrix
         batch_size, seq_len, _ = attention_weights_list[0].shape
         rollout = torch.eye(seq_len).unsqueeze(0).expand(batch_size, -1, -1).to(attention_weights_list[0].device)
         
-        # Multiply attention weights from all layers
         for attention_weights in attention_weights_list:
-            # Add residual connection (0.5 * attention + 0.5 * identity)
             attention_with_residual = 0.5 * attention_weights + 0.5 * torch.eye(seq_len).unsqueeze(0).to(attention_weights.device)
             rollout = torch.matmul(attention_with_residual, rollout)
         
-        # Extract attention from CLS token (first token) to all other tokens
-        cls_attention = rollout[:, 0, :]  # (batch_size, seq_len)
+        cls_attention = rollout[:, 0, :]
         
         return cls_attention
     
@@ -387,7 +242,7 @@ class WidefieldTransformer(nn.Module):
         trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
         
         info = f"""
-WidefieldTransformer Model Info:
+PRISMTransformer Model Info:
 - Brain Areas: {self.n_brain_areas}
 - Time Points: {self.time_points}
 - Hidden Dimension: {self.hidden_dim}
@@ -399,7 +254,11 @@ WidefieldTransformer Model Info:
         return info.strip()
 
 
-def create_model(
+# Backward-compatible aliases
+WidefieldTransformer = PRISMTransformer
+
+
+def create_prismt_model(
     n_brain_areas: int,
     time_points: int,
     hidden_dim: int = 256,
@@ -410,9 +269,9 @@ def create_model(
     dropout: float = 0.1,
     task_mode: str = 'classification',
     device: torch.device = torch.device('cpu')
-) -> WidefieldTransformer:
+) -> PRISMTransformer:
     """
-    Create and initialize a WidefieldTransformer model.
+    Create and initialize a PRISMTransformer classification model.
     
     Args:
         n_brain_areas: Number of brain areas (after averaging)
@@ -427,9 +286,9 @@ def create_model(
         device: Device to place the model on
         
     Returns:
-        Initialized WidefieldTransformer model
+        Initialized PRISMTransformer model
     """
-    model = WidefieldTransformer(
+    model = PRISMTransformer(
         n_brain_areas=n_brain_areas,
         time_points=time_points,
         hidden_dim=hidden_dim,
@@ -442,6 +301,10 @@ def create_model(
     )
     
     model = model.to(device)
-    logger.info(f"Created model with {sum(p.numel() for p in model.parameters()):,} parameters")
+    logger.info(f"Created PRISMTransformer model with {sum(p.numel() for p in model.parameters()):,} parameters")
     
     return model
+
+
+# Backward-compatible alias
+create_model = create_prismt_model

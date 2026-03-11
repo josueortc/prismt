@@ -49,7 +49,7 @@ The PRISMT GUI is a MATLAB application designed for **experimental neuroscientis
   - **Scheme** dropdown:
     - **Spatial (brain areas as tokens)** [default]
       - Description: "One token per brain area. Time is compressed inside each token."
-      - Matches `WidefieldTransformer`
+      - Matches `PRISMTransformer` (classification)
     - *(Future)* **Scalar (time×area tokens)**: "Each timepoint×area pair is a token."
   - **Read-only info**:
     - "Sequence length: N brain areas + 1 (CLS)"

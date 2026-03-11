@@ -1,6 +1,6 @@
-# PRISMT: Data Standardization Pipeline
+# PRISMT: Pattern Reconstruction and Interpretation with a Structured Multimodal Transformer
 
-PRISMT (Pipeline for Research In Standardized Modeling and Training) provides tools for standardizing widefield calcium imaging data into a unified MATLAB format.
+PRISMT is a transformer model combining **masked autoencoding** with **multimodal causal attention** to identify cortical regions that reorganize during visual perceptual learning. It also provides tools for standardizing widefield calcium imaging data into a unified MATLAB format.
 
 ## Overview
 
@@ -234,7 +234,7 @@ prismt/
 │   ├── standardize_data.m  # MATLAB standardization script
 │   └── validate_data.py   # Python validation script
 ├── data/                   # Data loading modules
-├── models/                 # Model architectures
+├── models/                 # Model architectures (PRISMTransformer)
 ├── training/               # Training utilities
 ├── utils/                  # Utility functions
 └── README.md               # This file
@@ -271,11 +271,14 @@ The `requirements.txt` includes `optuna>=3.0.0` for hyperparameter optimization.
 ## Citation
 
 ```bibtex
-@software{prismt,
-  title = {PRISMT: Unified Pipeline for Widefield and CDKL5 Data},
-  author = {Ortega Caro, Josue},
-  year = {2024},
-  url = {https://github.com/josueortc/prismt}
+@article{ortegacaro2025cholinergic,
+  title={Selective changes in cortical cholinergic signaling during learning},
+  author={Ortega Caro, Josue and Batchelor, Hannah M. and Lohani, Sweyta
+          and van Dijk, David and Cardin, Jessica A.},
+  journal={bioRxiv},
+  year={2025},
+  doi={10.1101/2025.08.29.673096},
+  publisher={Cold Spring Harbor Laboratory}
 }
 ```
 

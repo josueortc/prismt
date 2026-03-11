@@ -30,7 +30,7 @@ from data.data_loader import (
     create_task_definition_from_flexible,
     get_unique_column_values,
 )
-from models.transformer import create_model
+from models.transformer import create_prismt_model
 from training.trainer import Trainer, run_attention_and_diagnosis
 from utils.helpers import setup_logging, set_seed, get_device, format_time
 from evaluation.visualization import create_comprehensive_report
@@ -783,7 +783,7 @@ def main():
         logger.info(f"Classification: {num_classes} classes")
     else:
         num_classes = 1
-    model = create_model(
+    model = create_prismt_model(
         n_brain_areas=n_brain_areas,
         time_points=time_points,
         hidden_dim=args.hidden_dim,
