@@ -1,0 +1,181 @@
+function ds = makeDataset(X, trials, opts)
+%MAKEDATASET Build a PRISMT dataset from your own arrays.
+%
+%   ds = prismt.makeDataset(X, trials, Name=Value, ...)
+%
+%   X       numeric array. By default its dimensions are trials x channels x time
+%           (x modalities); use AxisOrder if yours are arranged differently.
+%   trials  table (or struct of column vectors) with one row per trial: mouse, session,
+%           phase, stim, response, ... Any names and any number of columns. Use [] if you
+%           have no per-trial information.
+%
+%   Name=Value options
+%     AxisOrder         order of the dimensions of X, e.g. "trials,time,channels".
+%                       Words: trials, channels, time, modalities. Default
+%                       "trials,channels,time,modalities".
+%     SamplingRate      samples per second (Hz). Times are TimeZero + (0:T-1)/SamplingRate.
+%     TimeZero          time of the first sample in seconds, e.g. -1.1 for 11 frames
+%                       before the stimulus at 10 Hz. Default 0.
+%     Times             explicit time of every sample in seconds (instead of the above).
+%     Event             what time 0 is, e.g. "stimulus onset".
+%     ChannelNames      one name per channel. Default "ch01", "ch02", ...
+%     ChannelX, ChannelY  channel positions for maps (optional).
+%     Hemisphere        "L"/"R" per channel (optional).
+%     Atlas             atlas name, e.g. "grid82" (optional).
+%     AtlasImage        label image, pixel value k = channel k (optional).
+%     ModalityNames     e.g. ["calcium","ach"]. Default "signal1", ...
+%     ModalityUnits     e.g. ["dF/F","dF/F"]. Default "".
+%     ModalityKinds     "neural", "behavior" or "other" per modality. Default "neural".
+%     ModalityChannels  cell array: which channels exist for each modality (1-based).
+%                       Default: all channels for every modality.
+%     Subject           name of the trials column that identifies each animal.
+%     Session           name of the trials column that identifies each session.
+%     ValueLabels       struct, e.g. struct('stim', {{0,"CS-"; 1,"CS+"}}).
+%     TrialUid          one unique id per trial (optional).
+%     Provenance        struct saved with the dataset (where the data came from).
+%
+%   Example
+%     X = rand(200, 82, 41);                          % trials x channels x time
+%     T = table(repmat(["M1";"M2"],100,1), randi(2,200,1)-1, 'VariableNames', {'mouse','stim'});
+%     ds = prismt.makeDataset(X, T, SamplingRate=10, TimeZero=-1.1, Subject="mouse", ...
+%                             ModalityNames="calcium", ModalityUnits="dF/F");
+%     prismt.writeDataset(ds, "mydata_prismt.mat");
+arguments
+    X {mustBeNumericOrLogical}
+    trials = []
+    opts.AxisOrder (1, 1) string = "trials,channels,time,modalities"
+    opts.SamplingRate double = []
+    opts.TimeZero (1, 1) double = 0
+    opts.Times double = []
+    opts.Event (1, 1) string = ""
+    opts.ChannelNames string = strings(0, 1)
+    opts.ChannelX double = []
+    opts.ChannelY double = []
+    opts.Hemisphere string = strings(0, 1)
+    opts.Atlas (1, 1) string = ""
+    opts.AtlasImage = []
+    opts.ModalityNames string = strings(0, 1)
+    opts.ModalityUnits string = strings(0, 1)
+    opts.ModalityKinds string = strings(0, 1)
+    opts.ModalityChannels cell = {}
+    opts.Subject (1, 1) string = ""
+    opts.Session (1, 1) string = ""
+    opts.ValueLabels = struct()
+    opts.TrialUid string = strings(0, 1)
+    opts.Provenance struct = struct()
+end
+
+ds = prismt.Dataset();
+ds.X = single(orderAxes(X, opts.AxisOrder));
+[N, R, T, M] = size(ds.X);
+
+if isempty(trials)
+    trials = table('Size', [N 0], 'VariableTypes', {});
+elseif isstruct(trials)
+    trials = struct2table(trials);
+elseif ~istable(trials)
+    error('prismt:E_DATA_COLUMNS', 'trials must be a table, a struct of column vectors, or [].');
+end
+ds.Trials = normalizeColumns(trials);
+
+ds.ChannelNames = defaultNames(opts.ChannelNames, R, "ch%02d");
+ds.ChannelX = opts.ChannelX(:);
+ds.ChannelY = opts.ChannelY(:);
+ds.Hemisphere = opts.Hemisphere(:);
+ds.Atlas = opts.Atlas;
+if ~isempty(opts.AtlasImage), ds.AtlasImage = uint16(opts.AtlasImage); end
+ds.ModalityNames = defaultNames(opts.ModalityNames, M, "signal%d");
+ds.ModalityUnits = fillTo(opts.ModalityUnits, M, "");
+ds.ModalityKinds = fillTo(opts.ModalityKinds, M, "neural");
+if isempty(opts.ModalityChannels)
+    ds.ModalityChannels = repmat({(1:R)'}, M, 1);
+else
+    ds.ModalityChannels = cellfun(@(c) double(c(:)), opts.ModalityChannels(:), 'UniformOutput', false);
+end
+
+if ~isempty(opts.Times)
+    ds.Times = double(opts.Times(:));
+elseif ~isempty(opts.SamplingRate)
+    ds.Times = opts.TimeZero + (0:T - 1)' / opts.SamplingRate;
+else
+    ds.Times = (0:T - 1)';
+    ds.Provenance.time_unknown = true;
+end
+ds.Event = opts.Event;
+ds.Subject = opts.Subject;
+ds.Session = opts.Session;
+ds.TrialUid = opts.TrialUid(:);
+ds.ValueLabels = labelsTable(opts.ValueLabels);
+provenance = opts.Provenance;
+for f = string(fieldnames(ds.Provenance))'
+    provenance.(f) = ds.Provenance.(f);
+end
+ds.Provenance = provenance;
+
+prismt.internal.throwIfErrors(ds.validate(), "The dataset is not valid");
+end
+
+function Y = orderAxes(X, order)
+words = strtrim(split(lower(order), ","))';
+words(words == "") = [];
+canonical = ["trials", "channels", "time", "modalities"];
+aliases = struct('trial', "trials", 'channel', "channels", 'regions', "channels", 'region', "channels", ...
+    'times', "time", 'timepoints', "time", 'frames', "time", 'modality', "modalities", 'signals', "modalities");
+for k = 1:numel(words)
+    if isfield(aliases, words(k)), words(k) = aliases.(words(k)); end
+end
+if numel(words) < ndims(X) || any(~ismember(words, canonical)) || numel(unique(words)) < numel(words)
+    error('prismt:E_DATA_SHAPE', ['AxisOrder "%s" must name each dimension of X once, using ' ...
+        'trials, channels, time and modalities.'], order);
+end
+missing = setdiff(canonical, words, 'stable');
+words = [words, missing];               % absent axes have size 1
+[~, perm] = ismember(canonical, words);
+Y = permute(X, perm);
+end
+
+function names = defaultNames(names, n, pattern)
+names = names(:);
+if isempty(names)
+    names = compose(pattern, (1:n)');
+end
+end
+
+function v = fillTo(v, n, default)
+v = v(:);
+if isempty(v)
+    v = repmat(string(default), n, 1);
+elseif isscalar(v) && n > 1
+    v = repmat(v, n, 1);
+end
+end
+
+function T = normalizeColumns(T)
+% Text columns become categorical (what PRISMT stores); everything else is kept.
+for c = 1:width(T)
+    col = T.(c);
+    if iscellstr(col) || ischar(col) || isstring(col)
+        s = string(col);
+        s(strlength(s) == 0) = missing;
+        T.(c) = categorical(s);
+    end
+end
+end
+
+function L = labelsTable(v)
+L = table(strings(0, 1), zeros(0, 1), strings(0, 1), 'VariableNames', {'Column', 'Value', 'Label'});
+if istable(v)
+    L = [L; v(:, {'Column', 'Value', 'Label'})];
+    return
+end
+for f = string(fieldnames(v))'
+    pairs = v.(f);
+    if isa(pairs, 'containers.Map')
+        keys = pairs.keys; vals = pairs.values;
+        pairs = [keys(:), vals(:)];
+    end
+    for k = 1:size(pairs, 1)
+        L(end + 1, :) = {f, double(pairs{k, 1}), string(pairs{k, 2})}; %#ok<AGROW>
+    end
+end
+end

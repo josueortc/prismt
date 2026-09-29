@@ -35,6 +35,12 @@ prismt = ["resources/VERSION", "resources/*.json", "resources/cluster/*"]
 [tool.pytest.ini_options]
 testpaths = ["tests/python"]
 pythonpath = ["src"]
+filterwarnings = [
+    # numpy 2.x with Apple's Accelerate BLAS reports spurious FP warnings in matmul.
+    "ignore:.*encountered in matmul:RuntimeWarning",
+    # nanmean over channels that are entirely NaN (planted in the synthetic data).
+    "ignore:Mean of empty slice:RuntimeWarning",
+]
 markers = [
     "slow: longer end-to-end, HPO and fake-SLURM tests (deselect with -m 'not slow')",
     "mps: needs an Apple GPU (MPS)",
