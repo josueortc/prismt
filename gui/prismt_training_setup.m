@@ -34,10 +34,10 @@ function createUIFigure()
         'Color', [0.97 0.97 0.98], ...
         'Resize', 'on');
 
-    % Main grid: responsive layout that grows with window
-    mainGrid = uigridlayout(fig, [8 2]);
-    mainGrid.RowHeight = {42, 115, 130, 200, 40, '1x', '1x', 28};
-    mainGrid.ColumnWidth = {'1x', 300};
+    % Main grid: scrollable when content exceeds viewport, all sections at natural size
+    mainGrid = uigridlayout(fig, [8 2], 'Scrollable', 'on');
+    mainGrid.RowHeight = {'fit', 'fit', 'fit', 'fit', 'fit', 'fit', 'fit', 'fit'};
+    mainGrid.ColumnWidth = {'1x', '1x'};
     mainGrid.Padding = [MAR MAR MAR MAR];
     mainGrid.RowSpacing = PAD;
     mainGrid.ColumnSpacing = PAD;
@@ -63,20 +63,29 @@ function createUIFigure()
     gl1.RowHeight = {32, '1x'};
     gl1.Padding = [12 12 12 12];
     gl1.RowSpacing = 6;
-    uilabel(gl1, 'Text', 'Dataset (.mat):');
+    dsLbl = uilabel(gl1, 'Text', 'Dataset (.mat):');
+    dsLbl.Layout.Row = 1;
+    dsLbl.Layout.Column = 1;
     pathField = uieditfield(gl1, 'text', 'Value', '');
-    uibutton(gl1, 'Text', 'Browse', 'ButtonPushedFcn', @(src,~) browseForFile(pathField));
-    uibutton(gl1, 'Text', 'Load', 'ButtonPushedFcn', @(src,~) validateDataset(pathField, summaryLabel));
+    pathField.Layout.Row = 1;
+    pathField.Layout.Column = 2;
+    browseBtn = uibutton(gl1, 'Text', 'Browse', 'ButtonPushedFcn', @(src,~) browseForFile(pathField));
+    browseBtn.Layout.Row = 1;
+    browseBtn.Layout.Column = 3;
     summaryLabel = uilabel(gl1, 'Text', 'No data loaded. Click Browse and Load.', 'FontColor', [0.45 0.45 0.45]);
     summaryLabel.Layout.Row = 2;
     summaryLabel.Layout.Column = [1 4];
+    summaryLabel.WordWrap = 'on';
+    loadBtn = uibutton(gl1, 'Text', 'Load', 'ButtonPushedFcn', @(src,~) validateDataset(pathField, summaryLabel));
+    loadBtn.Layout.Row = 1;
+    loadBtn.Layout.Column = 4;
 
     % === PANEL 2: Input & Tokenization ===
     p2 = uipanel(mainGrid, 'Title', '2. Input & Tokenization', 'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     p2.Layout.Row = 3;
     p2.Layout.Column = [1 2];
     gl2 = uigridlayout(p2, [5 6]);
-    gl2.ColumnWidth = {'fit', 100, 'fit', 200, 'fit', '1x'};
+    gl2.ColumnWidth = {'fit', '1x', 'fit', '1x', 'fit', '1x'};
     gl2.RowHeight = {32, 32, 32, 32, 32};
     gl2.Padding = [12 12 12 12];
     gl2.RowSpacing = 6;
@@ -105,7 +114,7 @@ function createUIFigure()
     p3.Layout.Row = 4;
     p3.Layout.Column = [1 2];
     gl3 = uigridlayout(p3, [6 10]);
-    gl3.ColumnWidth = {'fit', 100, 'fit', 95, 'fit', 130, 'fit', 85, 'fit', 85};
+    gl3.ColumnWidth = {'fit', '1x', 'fit', '1x', 'fit', '1x', 'fit', '1x', 'fit', '1x'};
     gl3.RowHeight = {32, 32, 32, 32, 32, 32};
     gl3.Padding = [12 12 12 12];
     gl3.RowSpacing = 6;
@@ -156,7 +165,7 @@ function createUIFigure()
     modePanel.Layout.Row = 5;
     modePanel.Layout.Column = [1 2];
     modeGl = uigridlayout(modePanel, [1 6]);
-    modeGl.ColumnWidth = {'fit', 180, 'fit', 55, 'fit', 55};
+    modeGl.ColumnWidth = {'fit', '1x', 'fit', '1x', 'fit', '1x'};
     modeGl.Padding = [4 4 4 4];
     uilabel(modeGl, 'Text', 'Mode:');
     modeDD = uidropdown(modeGl, 'Items', {'Standard training', 'HPO (Optuna)'}, 'Value', 'Standard training');
@@ -214,9 +223,9 @@ function createUIFigure()
     p6 = uipanel(mainGrid, 'Title', '6. Cluster (SLURM)', 'BackgroundColor', [1 1 1], 'FontWeight', 'bold');
     p6.Layout.Row = 7;
     p6.Layout.Column = 1;
-    gl6 = uigridlayout(p6, [5 6]);
-    gl6.ColumnWidth = {'fit', 'fit', 'fit', 'fit', 'fit', '1x'};
-    gl6.RowHeight = {28, 28, 28, 28, 28};
+    gl6 = uigridlayout(p6, [6 6]);
+    gl6.ColumnWidth = {'fit', '1x', 'fit', '1x', 'fit', '1x'};
+    gl6.RowHeight = {28, 28, 28, 28, 28, 28};
     gl6.Padding = [12 12 12 12];
     gl6.RowSpacing = 6;
     uilabel(gl6, 'Text', 'Partition:'); partitionEdit = uieditfield(gl6, 'text', 'Value', 'gpu');
@@ -236,11 +245,17 @@ function createUIFigure()
     clusterOutEdit = uieditfield(gl6, 'text', 'Value', '');
     clusterOutEdit.Layout.Row = 4;
     clusterOutEdit.Layout.Column = [3 6];
-    setupLbl = uilabel(gl6, 'Text', 'Setup (conda activate, etc.):');
-    setupLbl.Layout.Row = 5;
+    condaEnvLbl = uilabel(gl6, 'Text', 'Conda env:');
+    condaEnvLbl.Layout.Row = 5;
+    condaEnvLbl.Layout.Column = [1 2];
+    condaEnvEdit = uieditfield(gl6, 'text', 'Value', 'prismt', 'Placeholder', 'prismt (leave empty to skip)');
+    condaEnvEdit.Layout.Row = 5;
+    condaEnvEdit.Layout.Column = [3 6];
+    setupLbl = uilabel(gl6, 'Text', 'Extra setup (after activate):');
+    setupLbl.Layout.Row = 6;
     setupLbl.Layout.Column = [1 2];
-    setupEdit = uieditfield(gl6, 'text', 'Value', '');
-    setupEdit.Layout.Row = 5;
+    setupEdit = uieditfield(gl6, 'text', 'Value', '', 'Placeholder', 'e.g. module load cuda');
+    setupEdit.Layout.Row = 6;
     setupEdit.Layout.Column = [3 6];
 
     % === ACTION PANEL (right column) ===
@@ -255,15 +270,23 @@ function createUIFigure()
     runBtn = uibutton(actionGl, 'Text', 'Run Training Now', 'BackgroundColor', [0.25 0.55 0.35], ...
         'FontColor', [1 1 1], 'FontSize', 12, 'FontWeight', 'bold', ...
         'ButtonPushedFcn', @(src,~) runTraining(src.Parent.Parent.Parent));
+    runBtn.Layout.Row = 1;
     runBtn.Layout.Column = [1 2];
     genBtn = uibutton(actionGl, 'Text', 'Generate Cluster Script', 'BackgroundColor', [0.28 0.52 0.8], ...
         'FontColor', [1 1 1], 'FontWeight', 'bold', ...
         'ButtonPushedFcn', @(src,~) generateScript(src.Parent.Parent.Parent));
+    genBtn.Layout.Row = 2;
     genBtn.Layout.Column = [1 2];
-    uilabel(actionGl, 'Text', 'Results dir:');
+    resultsDirLbl = uilabel(actionGl, 'Text', 'Results dir:');
+    resultsDirLbl.Layout.Row = 3;
+    resultsDirLbl.Layout.Column = 1;
     resultsDirEdit = uieditfield(actionGl, 'text', 'Value', 'results', 'Placeholder', 'results/');
+    resultsDirEdit.Layout.Row = 3;
+    resultsDirEdit.Layout.Column = 2;
     runAnalysisBtn = uibutton(actionGl, 'Text', 'Run Analysis', 'BackgroundColor', [0.6 0.4 0.2], ...
-        'FontColor', [1 1 1], 'ButtonPushedFcn', @(src,~) runAnalysis(mainGrid.Parent));
+        'FontColor', [1 1 1], 'ButtonPushedFcn', @(src,~) runAnalysis(fig));
+    runAnalysisBtn.Layout.Row = 4;
+    runAnalysisBtn.Layout.Column = [1 2];
 
     % === STATUS BAR ===
     statusPanel = uipanel(mainGrid, 'Title', '', 'BackgroundColor', [0.94 0.94 0.96], 'BorderType', 'none');
@@ -280,10 +303,10 @@ function createUIFigure()
         configPanels{k}.Visible = 'off';
     end
     mainGrid.RowHeight = {42, 115, 0, 0, 0, 0, 0, 28};
-    
+
     % Fix runTraining/genBtn parent: fig is mainGrid.Parent
-    runBtn.ButtonPushedFcn = @(src,~) runTraining(mainGrid.Parent);
-    genBtn.ButtonPushedFcn = @(src,~) generateScript(mainGrid.Parent);
+    runBtn.ButtonPushedFcn = @(src,~) runTraining(fig);
+    genBtn.ButtonPushedFcn = @(src,~) generateScript(fig);
     
     % Store handles
     fig.UserData = struct(...
@@ -312,13 +335,12 @@ function createUIFigure()
         'clusterOutLabel', clusterOutLabel, 'clusterOutEdit', clusterOutEdit, ...
         'outputDirEdit', outputDirEdit, 'partitionEdit', partitionEdit, 'memEdit', memEdit, ...
         'gpusEdit', gpusEdit, 'cpusEdit', cpusEdit, 'timeEdit', timeEdit, ...
-        'clusterDataEdit', clusterDataEdit, 'setupEdit', setupEdit, ...
+        'clusterDataEdit', clusterDataEdit, 'condaEnvEdit', condaEnvEdit, 'setupEdit', setupEdit, ...
         'statusLabel', statusLabel, 'runBtn', runBtn, 'genBtn', genBtn, ...
         'resultsDirEdit', resultsDirEdit, 'runAnalysisBtn', runAnalysisBtn, ...
         'dataInfo', struct());
     
     % Decision tree: show HPO options only when HPO mode selected
-    fig = mainGrid.Parent;
     modeDD.ValueChangedFcn = @(src,~) updateModeDependentUI(fig);
     updateModeDependentUI(fig);
     
@@ -554,7 +576,7 @@ function validateDataset(pathField, summaryLabel)
             end
         end
         if isfield(fig.UserData, 'mainGrid') && isvalid(fig.UserData.mainGrid)
-            fig.UserData.mainGrid.RowHeight = {42, 115, 130, 200, 40, '1x', '1x', 28};
+            fig.UserData.mainGrid.RowHeight = {'fit', 'fit', 'fit', 'fit', 'fit', 'fit', 'fit', 'fit'};
         end
         if isfield(fig.UserData, 'tokenInfoLabel')
             rp = 1; tp = 1;
@@ -792,6 +814,7 @@ function generateScript(fig)
     cpus = ud.cpusEdit.Value;
     mem = ud.memEdit.Value;
     timeHrs = ud.timeEdit.Value;
+    condaEnv = iif(isfield(ud, 'condaEnvEdit') && isvalid(ud.condaEnvEdit), strtrim(ud.condaEnvEdit.Value), '');
     setupCmd = strtrim(ud.setupEdit.Value);
     useHpo = strcmp(ud.modeDD.Value, 'HPO (Optuna)');
     clusterOutDir = strtrim(ud.clusterOutEdit.Value);
@@ -871,8 +894,22 @@ function generateScript(fig)
         fprintf(fid, 'export MKL_NUM_THREADS=${SLURM_CPUS_PER_TASK:-1}\n');
         fprintf(fid, 'export CUDA_VISIBLE_DEVICES=0\n\n');
     end
+    % Conda environment: check if exists, create if not, then activate
+    if ~isempty(condaEnv)
+        fprintf(fid, '# Conda environment setup\n');
+        fprintf(fid, 'ENV_NAME="%s"\n', condaEnv);
+        fprintf(fid, 'eval "$(conda shell.bash hook)"\n');
+        fprintf(fid, 'if conda env list | grep -qE "^${ENV_NAME}[[:space:]]"; then\n');
+        fprintf(fid, '  echo "Conda env $ENV_NAME exists, activating..."\n');
+        fprintf(fid, 'else\n');
+        fprintf(fid, '  echo "Creating conda env $ENV_NAME..."\n');
+        fprintf(fid, '  conda create -n "$ENV_NAME" python=3.10 -y\n');
+        fprintf(fid, '  conda run -n "$ENV_NAME" pip install -r "$PROJECT_ROOT/requirements.txt"\n');
+        fprintf(fid, 'fi\n');
+        fprintf(fid, 'conda activate "$ENV_NAME"\n\n');
+    end
     if ~isempty(setupCmd)
-        fprintf(fid, '# Optional setup (conda, modules)\n');
+        fprintf(fid, '# Extra setup (module load, etc.)\n');
         fprintf(fid, '%s\n\n', setupCmd);
     end
     fprintf(fid, '%s\n', cmd);
@@ -1055,9 +1092,11 @@ function createUIFigureLegacy()
     timeEdit = uieditfield(p6, 'numeric', 'Position', [380 69 36 28], 'Value', 24);
     uilabel(p6, 'Text', 'Data path on cluster:', 'Position', [15 42 120 22]);
     clusterDataEdit = uieditfield(p6, 'text', 'Position', [140 39 270 28], 'Value', '');
-    clusterOutLabel = uilabel(p6, 'Text', 'HPO out dir (cluster):', 'Position', [15 12 115 22]);
-    clusterOutEdit = uieditfield(p6, 'text', 'Position', [135 9 275 28], 'Value', '');
-    uilabel(p6, 'Text', 'Setup (conda activate, etc.):', 'Position', [15 2 155 22]);
+    clusterOutLabel = uilabel(p6, 'Text', 'HPO out dir (cluster):', 'Position', [15 32 115 22]);
+    clusterOutEdit = uieditfield(p6, 'text', 'Position', [135 29 275 28], 'Value', '');
+    uilabel(p6, 'Text', 'Conda env:', 'Position', [15 22 80 22]);
+    condaEnvEdit = uieditfield(p6, 'text', 'Position', [100 19 310 28], 'Value', 'prismt');
+    uilabel(p6, 'Text', 'Extra setup (after activate):', 'Position', [15 2 155 22]);
     setupEdit = uieditfield(p6, 'text', 'Position', [170 2 240 22], 'Value', '');
     uilabel(actionPanel, 'Text', 'Results dir:', 'Position', [15 95 70 22]);
     resultsDirEdit = uieditfield(actionPanel, 'text', 'Position', [90 92 175 28], 'Value', 'results');
@@ -1089,7 +1128,7 @@ function createUIFigureLegacy()
         'atlasTypeDD', atlasTypeDD, ...
         'modeDD', modeDD, 'hpoTrialsLabel', hpoTrialsLabel, 'hpoTrialsEdit', hpoTrialsEdit, 'hpoEpochsLabel', hpoEpochsLabel, 'hpoEpochsEdit', hpoEpochsEdit, ...
         'clusterOutLabel', clusterOutLabel, 'clusterOutEdit', clusterOutEdit, 'partitionEdit', partitionEdit, 'memEdit', memEdit, ...
-        'gpusEdit', gpusEdit, 'cpusEdit', cpusEdit, 'timeEdit', timeEdit, 'clusterDataEdit', clusterDataEdit, 'setupEdit', setupEdit, ...
+        'gpusEdit', gpusEdit, 'cpusEdit', cpusEdit, 'timeEdit', timeEdit,         'clusterDataEdit', clusterDataEdit, 'condaEnvEdit', condaEnvEdit, 'setupEdit', setupEdit, ...
         'statusLabel', statusLabel, 'runBtn', runBtn, 'genBtn', genBtn, ...
         'resultsDirEdit', resultsDirEdit, 'runAnalysisBtn', runAnalysisBtn, ...
         'dataInfo', struct());
@@ -1113,7 +1152,7 @@ function layoutResize(fig, MAR)
     if W < 600 || H < 500, return; end
     rightColW = min(300, floor(W*0.35));
     leftW = W - 2*MAR - 15 - rightColW;
-    hdr = 42; p1h = 115; p2h = 130; p3h = 170; modeH = 40; p4h = 115; p6h = 105; statusH = 28;
+    hdr = 42; p1h = 115; p2h = 130; p3h = 170; modeH = 40; p4h = 115; p6h = 125; statusH = 28;
     y = H - hdr;
     lp.header.Position = [0 y W hdr];
     y = y - 12 - p1h;
