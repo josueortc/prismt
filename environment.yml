@@ -1,0 +1,31 @@
+# PRISMT Python environment for a lab computer (macOS, Linux or Windows).
+#
+#   conda env create -f environment.yml      (or: micromamba create -f environment.yml)
+#   conda activate prismt
+#   python -m prismt doctor
+#
+# The MATLAB app can create this environment for you (Setup tab -> Create environment).
+#
+# Channels are conda-forge only, so conda never asks you to accept Anaconda's terms.
+# PyTorch comes from pip:
+#   - macOS on Apple silicon: the wheel includes Apple GPU (MPS) support.
+#   - Linux: the default wheel includes CUDA.
+#   - Windows with an NVIDIA GPU: after creating the environment, run
+#       pip install torch==2.5.1 --index-url https://download.pytorch.org/whl/cu121
+# For clusters use the job folder's setup_env.sh instead (it picks the CUDA build).
+name: prismt
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      - torch==2.5.1
+      - numpy==2.2.5
+      - scipy==1.15.3
+      - h5py==3.16.0
+      - scikit-learn==1.7.2
+      - optuna==5.0.0
+      - pytest==9.1.1
+      - -e .

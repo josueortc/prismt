@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prismt"
+dynamic = ["version"]
+description = "Masked-autoencoder and classification transformers for trial-structured neural and behavioral data, driven from MATLAB"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "h5py>=3.8",
+    "scikit-learn>=1.3",
+    "torch>=2.2",
+]
+
+[project.optional-dependencies]
+hpo = ["optuna>=4.0"]
+dev = ["pytest>=7.4"]
+
+[project.scripts]
+prismt = "prismt.cli:main"
+
+[tool.setuptools.dynamic]
+version = {file = "src/prismt/resources/VERSION"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+prismt = ["resources/VERSION", "resources/*.json", "resources/cluster/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]
+pythonpath = ["src"]
+markers = [
+    "slow: longer end-to-end, HPO and fake-SLURM tests (deselect with -m 'not slow')",
+    "mps: needs an Apple GPU (MPS)",
+    "matlab: needs MATLAB (set PRISMT_MATLAB to the matlab executable)",
+]

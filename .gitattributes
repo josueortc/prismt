@@ -1,0 +1,12 @@
+# Shell scripts must keep LF endings even when the repo is checked out on
+# Windows, otherwise bash on the cluster fails with $'\r' errors.
+* text=auto
+*.sh text eol=lf
+*.sbatch text eol=lf
+src/prismt/resources/cluster/* text eol=lf
+
+*.mat binary
+*.h5 binary
+*.npz binary
+*.png binary
+*.pt binary

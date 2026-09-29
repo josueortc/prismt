@@ -1,65 +1,54 @@
+# ---------------------------------------------------------------------------
+# PRISMT .gitignore
+#
+# Rule of thumb: user data, run outputs and environments are never committed.
+# Small files that are part of the package (test fixtures, the atlas asset)
+# are re-included at the bottom. Do not name fixture folders "runs", "logs",
+# "artifacts" or "results": a directory pattern here cannot be re-included.
+# ---------------------------------------------------------------------------
+
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
-
-# Virtual environments
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.venv*/
 venv/
-env/
-ENV/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Generated scripts (GUI output)
-generated_scripts/
-
-# Results and checkpoints
-results/
-checkpoints/
-*.pt
-*.pth
-
-# Logs
-logs/
-*.log
-
-# Data files (large)
-*.mat
-*.npy
-!**/test_data/*.mat
-
-# OS
+# OS and editors
 .DS_Store
 Thumbs.db
+*.asv
+*~
+.vscode/
+.idea/
 
-# WandB
+# Data and run outputs
+*.mat
+*.h5
+*.hdf5
+*.npy
+*.npz
+*.pt
+*.pth
+*.journal
+*.db
+*.partial
+runs/
+prismt_runs/
+hpo_runs/
+artifacts/
+generated_scripts/
 wandb/
+logs/
+tests/matlab/results/
 
-# Test outputs
-/tmp/
-test_*.mat
+# Scratch material that is not part of the package
+docs/audit-screenshots/
+
+# Re-include small files that are part of the package
+!tests/fixtures/**
+!matlab/+prismt/+atlas/private/*.mat
