@@ -1,0 +1,32 @@
+#!/bin/bash
+# Fake sbatch for tests: runs the job script synchronously (each array task in turn),
+# with the environment Slurm would give it. Records every call in $FAKE_SLURM_LOG.
+set -e
+ARRAY=""; OUTPUT="slurm-%j.out"; CHDIR="$PWD"; PARSABLE=0; CPUS=1
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --array) ARRAY="$2"; shift 2;;
+    --output) OUTPUT="$2"; shift 2;;
+    --chdir) CHDIR="$2"; shift 2;;
+    --cpus-per-task) CPUS="$2"; shift 2;;
+    --parsable) PARSABLE=1; shift;;
+    --*) shift 2;;
+    *) SCRIPT="$1"; shift;;
+  esac
+done
+JOB=$(( (RANDOM % 90000) + 10000 ))
+echo "sbatch $SCRIPT array=$ARRAY" >> "${FAKE_SLURM_LOG:-/dev/null}"
+cd "$CHDIR"
+if [ -n "$ARRAY" ]; then
+  LO=${ARRAY%-*}; HI=${ARRAY#*-}
+  for ((i=LO; i<=HI; i++)); do
+    OUT=${OUTPUT//%A/$JOB}; OUT=${OUT//%a/$i}; OUT=${OUT//%j/$JOB}
+    SLURM_SUBMIT_DIR="$CHDIR" SLURM_JOB_ID=$JOB SLURM_ARRAY_TASK_ID=$i SLURM_CPUS_PER_TASK=$CPUS \
+      bash "$SCRIPT" > "$OUT" 2>&1 || echo "task $i failed" >> "${FAKE_SLURM_LOG:-/dev/null}"
+  done
+else
+  OUT=${OUTPUT//%j/$JOB}
+  SLURM_SUBMIT_DIR="$CHDIR" SLURM_JOB_ID=$JOB SLURM_CPUS_PER_TASK=$CPUS bash "$SCRIPT" > "$OUT" 2>&1 \
+    || echo "job failed" >> "${FAKE_SLURM_LOG:-/dev/null}"
+fi
+if [ $PARSABLE = 1 ]; then echo "$JOB"; else echo "Submitted batch job $JOB"; fi

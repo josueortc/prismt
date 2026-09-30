@@ -349,9 +349,18 @@ def run(cfg: dict, *, run_dir: str | Path | None = None, only_fold: int | None =
             write_json(out / "run.json", source)
         write_json(out / "run_info.json", {**environment_record(device), "command": sys.argv, "started": utc_now()})
         _write_splits(out, prep)
-        history = HistoryWriter(out / "history.csv")
-        folds = prep.plan.folds if only_fold is None else [prep.plan.folds[only_fold - 1]]
         n_folds = len(prep.plan.folds)
+        if only_fold is not None and not 1 <= only_fold <= n_folds:
+            raise ConfigError("E_RUN_FOLD", f"There are {n_folds} folds; fold {only_fold} does not exist.")
+        folds = prep.plan.folds if only_fold is None else [prep.plan.folds[only_fold - 1]]
+        if only_fold is not None and n_folds > 1:
+            # A fold running as its own cluster job must not share files with its siblings.
+            fdir = out / f"fold_{only_fold:02d}"
+            fdir.mkdir(exist_ok=True)
+            status.path = fdir / "status.json"
+            history = HistoryWriter(fdir / "history.csv")
+        else:
+            history = HistoryWriter(out / "history.csv")
         outcomes = []
         for fold in folds:
             fold_dir = out if n_folds == 1 else out / f"fold_{fold.index + 1:02d}"
@@ -410,6 +419,21 @@ def _run_fold(prep: Prepared, fold: Fold, fold_dir: Path, device, status, histor
     result = fit(model, task, tensors, fold, cfg["train"], monitor=monitor, status=status, history=history,
                  fold_label=fold.index + 1, n_folds=n_folds, should_stop=should_stop)
     status.update("evaluating", force=True, message=f"Evaluating fold {fold.index + 1}/{n_folds}")
+    outcome = _evaluate_fold(prep, fold, model, task, tensors, values, valid, norm, result)
+    save_checkpoint(fold_dir / "model.pt", model, extra={
+        "normalizer": norm.to_state(), "data_signature": data_signature(prep),
+        "class_names": prep.sel.class_names, "best_epoch": result.best_epoch,
+        "best_value": result.best_value if np.isfinite(result.best_value) else None,
+        "epochs_run": result.epochs_run, "stopped": result.stopped, "seconds": result.seconds,
+        "dataset_fingerprint": prep.ds.fingerprint, "split_fingerprint": prep.plan.fingerprint(),
+        "run_config": prep.cfg, "fold": fold.index + 1})
+    if n_folds > 1:
+        _write_fold(fold_dir, prep, [outcome])
+    return outcome
+
+
+def _evaluate_fold(prep: Prepared, fold: Fold, model, task, tensors, values, valid, norm, result) -> FoldOutcome:
+    cfg = prep.cfg
     bs = max(cfg["train"]["batch_size"], 64)
     all_rows = np.arange(prep.sel.n)
     extras = {"normalizer": norm}
@@ -440,16 +464,36 @@ def _run_fold(prep: Prepared, fold: Fold, fold_dir: Path, device, status, histor
                              with_baselines=True, need_embeddings=cfg["output"]["save_embeddings"])
         if cfg["output"]["save_embeddings"]:
             extras["embedding"] = test.pop("embedding")
-    save_checkpoint(fold_dir / "model.pt", model, extra={
-        "normalizer": norm.to_state(), "data_signature": data_signature(prep),
-        "class_names": prep.sel.class_names, "best_epoch": result.best_epoch,
-        "best_value": result.best_value if np.isfinite(result.best_value) else None,
-        "dataset_fingerprint": prep.ds.fingerprint, "split_fingerprint": prep.plan.fingerprint(),
-        "run_config": prep.cfg, "fold": fold.index + 1})
-    outcome = FoldOutcome(fold, result, val, test, extras)
-    if n_folds > 1:
-        _write_fold(fold_dir, prep, [outcome])
-    return outcome
+    return FoldOutcome(fold, result, val, test, extras)
+
+
+def combine(cfg: dict, run_dir: str | Path) -> Path:
+    """Pool cross-validation folds that were trained as separate cluster jobs (no retraining)."""
+    from types import SimpleNamespace
+
+    from prismt.env import select_device
+    from prismt.model.checkpoint import extra, load_checkpoint
+
+    out = Path(run_dir)
+    prep = prepare(cfg)
+    device = select_device(cfg["train"]["device"])
+    outcomes = []
+    missing = [f.index + 1 for f in prep.plan.folds if not (out / f"fold_{f.index + 1:02d}" / "model.pt").exists()]
+    if missing:
+        raise ConfigError("E_RUN_FOLDS_MISSING", f"Folds {missing} have not finished yet.",
+                          hint="Wait for every fold job to finish (squeue --me), then combine again.")
+    for fold in prep.plan.folds:
+        ckpt = load_checkpoint(out / f"fold_{fold.index + 1:02d}")
+        model, task, tensors, (norm, values, valid) = _build(prep, fold, device, ckpt)
+        model.load_state_dict(ckpt["state_dict"])
+        result = SimpleNamespace(best_epoch=extra(ckpt, "best_epoch"), epochs_run=extra(ckpt, "epochs_run", 0),
+                                 stopped=extra(ckpt, "stopped", ""), seconds=extra(ckpt, "seconds", 0.0),
+                                 best_value=extra(ckpt, "best_value"))
+        outcomes.append(_evaluate_fold(prep, fold, model, task, tensors, values, valid, norm, result))
+    _write_summary(out, prep, outcomes, device)
+    StatusWriter(out / "status.json", task=cfg["task"], run_dir=str(out)).update(
+        "finished", force=True, message="Finished (folds combined)")
+    return out
 
 
 # ---------------------------------------------------------------------------------------

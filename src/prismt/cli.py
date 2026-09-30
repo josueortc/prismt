@@ -114,12 +114,33 @@ def cmd_train(args: argparse.Namespace) -> int:
     from prismt.run import run
 
     cfg, source = _load(args)
-    out = run(cfg, run_dir=args.run_dir, only_fold=args.fold, source=source)
+    if args.combine:
+        from prismt.run import combine
+
+        if not args.run_dir:
+            raise SystemExit("--combine needs --run-dir")
+        out = combine(cfg, args.run_dir)
+    else:
+        out = run(cfg, run_dir=args.run_dir, only_fold=args.fold, source=source)
     import json
 
     metrics = json.loads((out / "metrics.json").read_text()) if (out / "metrics.json").exists() else {}
     _emit(args, {"ok": True, "run_dir": str(out), "summary": metrics.get("summary_lines", [])},
           "\n".join([f"Run folder: {out}", *metrics.get("summary_lines", [])]))
+    return EXIT_OK
+
+
+def cmd_hpo(args: argparse.Namespace) -> int:
+    from prismt.hpo import run_hpo
+
+    cfg, source = _load(args)
+    finalize = True if args.finalize else (False if args.worker is not None else None)
+    out = run_hpo(cfg, args.run_dir, worker=args.worker, do_finalize=finalize, source=source)
+    import json
+
+    summary = json.loads((out / "hpo_summary.json").read_text()) if (out / "hpo_summary.json").exists() else {}
+    _emit(args, {"ok": True, "run_dir": str(out), "summary": summary.get("summary_lines", [])},
+          "\n".join([f"Run folder: {out}", *summary.get("summary_lines", [])]))
     return EXIT_OK
 
 
@@ -176,6 +197,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", required=True, help="run settings (JSON)")
     p.add_argument("--run-dir", default=None, help="run folder to write (default: a new folder in output.root)")
     p.add_argument("--fold", type=int, default=None, help="only this cross-validation fold (1-based)")
+    p.add_argument("--combine", action="store_true", help="pool folds that were trained as separate jobs")
+
+    p = add("hpo", cmd_hpo, "tune settings automatically, then retrain the best ones")
+    p.add_argument("--config", required=True, help="run settings (JSON)")
+    p.add_argument("--run-dir", default=None, help="run folder (shared by all cluster workers)")
+    p.add_argument("--worker", type=int, default=None, help="cluster worker number: search only, no final retraining")
+    p.add_argument("--finalize", action="store_true", help="only retrain the best settings found so far")
 
     p = add("summarize", cmd_summarize, "describe a run folder")
     p.add_argument("run", help="run folder")
