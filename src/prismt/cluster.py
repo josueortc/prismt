@@ -77,18 +77,18 @@ def write_job_folder(config: dict, out_dir: str | Path, profile: dict | None = N
     }
     env = "".join(f"PRISMT_{k}={shlex.quote(str(v))}\n" for k, v in values.items())
     (job / "job.env").write_bytes(("# Resources for this job; edit if needed, then run: bash submit.sh\n" + env).encode())
-    (job / "README.txt").write_text(readme(job_name, prof, dataset_remote), encoding="utf-8")
+    (job / "README.txt").write_text(readme(job_name, prof, dataset_remote, job), encoding="utf-8")
     return job
 
 
-def readme(job_name: str, prof: dict, dataset_remote: str | None) -> str:
+def readme(job_name: str, prof: dict, dataset_remote: str | None, job: Path | None = None) -> str:
     login = f"{prof['user']}@{prof['host']}" if prof["user"] and prof["host"] else "NETID@CLUSTER"
     root = prof["remote_root"]
     lines = [
         f"PRISMT cluster job: {job_name}",
         "",
         "1. Copy this folder to the cluster (on your computer; Windows without rsync: use scp -r):",
-        f"     rsync -av \"{job_name}\" {login}:{root}/",
+        f"     rsync -av \"{job or job_name}\" {login}:{root}/",
     ]
     if dataset_remote:
         lines += ["   and the dataset, if it is not there yet:",
@@ -103,7 +103,7 @@ def readme(job_name: str, prof: dict, dataset_remote: str | None) -> str:
         "5. Check progress:",
         f"     squeue --me      tail -f {root}/{job_name}/logs/*.out",
         "6. When finished, copy the results back (on your computer):",
-        f"     rsync -av {login}:{root}/{job_name}/results/ \"{job_name}/results/\"",
+        f"     rsync -av {login}:{root}/{job_name}/results/ \"{job or job_name}/results/\"",
         "   then open the job folder in the PRISMT app (Results tab).",
         "",
         "Stop a job with: scancel <job id>. Submitting again is safe; tuning continues where it stopped.",

@@ -144,6 +144,26 @@ def cmd_hpo(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_jobfolder(args: argparse.Namespace) -> int:
+    import json
+    from pathlib import Path
+
+    from prismt.cluster import write_job_folder
+    from prismt.config import load_config
+    from prismt.run import prepare
+
+    source = json.loads(Path(args.config).read_text(encoding="utf-8"))
+    profile = json.loads(Path(args.profile).read_text(encoding="utf-8")) if args.profile else {}
+    n_folds = 1
+    if args.mode == "train":
+        n_folds = len(prepare(load_config(args.config)).plan.folds)
+    job = write_job_folder(source, args.out, profile, mode=args.mode, n_folds=n_folds, hpo_workers=args.workers,
+                           dataset_remote=args.remote_dataset, name=args.name)
+    readme = (job / "README.txt").read_text(encoding="utf-8")
+    _emit(args, {"ok": True, "job_dir": str(job), "n_folds": n_folds, "readme": readme}, f"Job folder: {job}\n\n{readme}")
+    return EXIT_OK
+
+
 def cmd_summarize(args: argparse.Namespace) -> int:
     from prismt.run import summarize
 
@@ -204,6 +224,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--run-dir", default=None, help="run folder (shared by all cluster workers)")
     p.add_argument("--worker", type=int, default=None, help="cluster worker number: search only, no final retraining")
     p.add_argument("--finalize", action="store_true", help="only retrain the best settings found so far")
+
+    p = add("jobfolder", cmd_jobfolder, "write a self-contained SLURM job folder")
+    p.add_argument("--config", required=True, help="run settings (JSON)")
+    p.add_argument("--out", required=True, help="folder in which to create the job folder")
+    p.add_argument("--profile", default=None, help="cluster profile (JSON)")
+    p.add_argument("--mode", default="train", choices=["train", "hpo"])
+    p.add_argument("--workers", type=int, default=4, help="parallel tuning workers (hpo)")
+    p.add_argument("--remote-dataset", default=None, help="dataset path on the cluster")
+    p.add_argument("--name", default=None, help="job name")
 
     p = add("summarize", cmd_summarize, "describe a run folder")
     p.add_argument("run", help="run folder")
