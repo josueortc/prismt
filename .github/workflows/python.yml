@@ -14,8 +14,8 @@ jobs:
           - {os: macos-14, deps: pinned}
           - {os: ubuntu-latest, deps: latest}   # early warning for new numpy / torch / optuna releases
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: {python-version: "3.11"}
       - name: Install (pinned, as in environment.yml)
         if: matrix.deps == 'pinned'
@@ -30,7 +30,20 @@ jobs:
           python -m pip install numpy scipy h5py scikit-learn optuna pytest
           python -m pip install -e .
       - run: python -m prismt doctor
-      - run: python -m pytest tests/python -q -m "not slow"
-      - run: python -m pytest tests/python -q -m slow
+      # Failures are also printed as annotations, so they are readable without opening the log.
+      - name: Fast tests
+        run: python -m pytest tests/python -q -m "not slow" -rf --tb=line -p no:cacheprovider 2>&1 | tee fast.txt; exit ${PIPESTATUS[0]}
+        shell: bash
+      - name: Slow tests
+        run: python -m pytest tests/python -q -m slow -rf --tb=line -p no:cacheprovider 2>&1 | tee slow.txt; exit ${PIPESTATUS[0]}
+        shell: bash
+      - name: Report failures
+        if: failure()
+        shell: bash
+        run: |
+          for f in fast.txt slow.txt; do
+            [ -f "$f" ] || continue
+            grep -E "^(FAILED|ERROR) |Error|assert" "$f" | head -20 | while IFS= read -r line; do echo "::error::${line:0:900}"; done
+          done
       - name: Settings reference is up to date
         run: python tools/make_settings_doc.py --check

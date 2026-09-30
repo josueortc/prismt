@@ -12,7 +12,7 @@ jobs:
       matrix:
         variant: [cpu, cuda]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: docker build -f docker/Dockerfile --build-arg VARIANT=${{ matrix.variant }} -t prismt:${{ matrix.variant }} .
       - if: matrix.variant == 'cpu'
         run: docker run --rm prismt:cpu doctor
