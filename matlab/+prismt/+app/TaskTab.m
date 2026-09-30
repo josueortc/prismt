@@ -11,6 +11,7 @@ classdef TaskTab < handle
         Filters struct = struct()
         Mae struct = struct()
         Testing struct = struct()
+        Inputs struct = struct()
         Checks
     end
     properties (Constant)
@@ -44,11 +45,12 @@ classdef TaskTab < handle
             t.TaskNote = prismt.app.ui.note(t.Content, "");
             t.TaskNote.Layout.Column = [1 2];
 
-            left = uigridlayout(t.Content, [3 1], 'RowHeight', {'1x', 'fit', 'fit'}, 'Padding', 0, 'Scrollable', 'on');
+            left = uigridlayout(t.Content, [4 1], 'RowHeight', {300, 'fit', 'fit', 'fit'}, 'Padding', 0, 'Scrollable', 'on');
             left.BackgroundColor = t.Content.BackgroundColor;
             t.buildClasses(left);
             t.buildMae(left);
             t.buildFilters(left);
+            t.buildInputs(left);
             t.buildTesting(left);
             t.Checks = prismt.app.ChecksPanel(app, t.Content);
             t.Checks.Panel.Layout.Row = 3; t.Checks.Panel.Layout.Column = 2;
@@ -70,6 +72,7 @@ classdef TaskTab < handle
             t.Classes.panel.Visible = onoff(~isMae);
             t.Mae.panel.Visible = onoff(isMae);
             t.refreshFilters();
+            t.refreshInputs();
             if isMae, t.refreshMae(); else, t.refreshClasses(); end
             t.refreshSplit();
             t.Checks.refresh();
@@ -94,7 +97,7 @@ classdef TaskTab < handle
             t.Classes.column = uidropdown(g, 'Items', "-", 'Tooltip', "The trial column whose values are the classes", ...
                 'ValueChangedFcn', @(s, ~) t.App.safely(@() t.App.Controller.setLabel(s.Value)));
             t.Classes.count = prismt.app.ui.note(g, "");
-            t.Classes.table = uitable(g, 'ColumnName', {'Use', 'Value', 'Class name', 'Trials', 'Animals'}, ...
+            t.Classes.table = uitable(g, 'ColumnName', {'Use', 'Value', 'Class name', 'Trials', 'Subjects'}, ...
                 'RowName', {}, 'ColumnEditable', [true false true false false], 'ColumnWidth', {45, 'auto', 'auto', 70, 70}, ...
                 'Data', cell(0, 5), 'CellEditCallback', @(s, ~) t.App.safely(@() t.tableEdited(s)));
             t.Classes.table.Layout.Column = [1 3];
@@ -136,7 +139,7 @@ classdef TaskTab < handle
                     names(hit) = string(classes{k}.name);
                 end
             end
-            t.Classes.table.Data = [num2cell(used), cellstr(T.Value), cellstr(names), num2cell(T.Trials), num2cell(T.Animals)];
+            t.Classes.table.Data = [num2cell(used), cellstr(T.Value), cellstr(names), num2cell(T.Trials), num2cell(T.Subjects)];
             nc = numel(unique(names(used)));
             t.Classes.count.Text = nc + " classes, " + sum(T.Trials(used)) + " trials";
             fin = c.task() == "finetune";
@@ -350,18 +353,71 @@ classdef TaskTab < handle
             t.App.Controller.setFilter(string(t.Filters.column.Value), strings(0, 1));
         end
 
+        % ---- channels and signals -----------------------------------------------------
+        function buildInputs(t, parent)
+            p = prismt.app.ui.panel(parent, "Which channels and signals");
+            p.Layout.Row = 3;
+            g = prismt.app.ui.grid(p, {70, 'fit'}, {'fit', 180, 'fit', 180, '1x'});
+            uilabel(g, 'Text', 'Signals', 'Tooltip', "The model uses every selected signal (e.g. neural activity and behavior)");
+            t.Inputs.signals = uilistbox(g, 'Items', "-", 'Multiselect', 'on', ...
+                'ValueChangedFcn', @(s, ~) t.App.safely(@() t.inputsChanged("modalities", s)));
+            t.Inputs.groupsLabel = uilabel(g, 'Text', 'Channel groups', 'Tooltip', "Use only channels of these groups (set groups on the Data tab > Channels)");
+            t.Inputs.groups = uilistbox(g, 'Items', "-", 'Multiselect', 'on', ...
+                'ValueChangedFcn', @(s, ~) t.App.safely(@() t.inputsChanged("channel_groups", s)));
+            t.Inputs.using = prismt.app.ui.note(g, "");
+            t.Inputs.using.Layout.Row = 2; t.Inputs.using.Layout.Column = [1 5];
+        end
+
+        function refreshInputs(t)
+            c = t.App.Controller;
+            ds = c.Dataset;
+            t.Inputs.signals.Items = ds.ModalityNames;
+            sel = string(c.value("selection.modalities", ds.ModalityNames));
+            t.Inputs.signals.Value = cellstr(intersect(sel, ds.ModalityNames, 'stable'));
+            groups = ds.ChannelGroups;
+            ug = unique(groups(strlength(groups) > 0));
+            has = ~isempty(ug);
+            t.Inputs.groups.Visible = onoff(has); t.Inputs.groupsLabel.Visible = onoff(has);
+            if has
+                t.Inputs.groups.Items = ug;
+                gsel = string(c.value("selection.channel_groups", ug));
+                t.Inputs.groups.Value = cellstr(intersect(gsel, ug, 'stable'));
+            end
+            mods = find(ismember(ds.ModalityNames, sel));
+            chans = unique(vertcat(ds.ModalityChannels{mods}));
+            if has
+                gs = string(c.value("selection.channel_groups", ug));
+                chans = chans(ismember(groups(chans), gs));
+            end
+            pairs = 0;
+            for m = mods(:)', pairs = pairs + nnz(ismember(ds.ModalityChannels{m}, chans)); end
+            t.Inputs.using.Text = "Using " + numel(mods) + " of " + ds.M + " signals and " + numel(chans) + " of " + ds.R + ...
+                " channels (" + pairs + " channel-signal pairs, each a row of tokens for the model).";
+        end
+
+        function inputsChanged(t, what, box)
+            items = string(box.Items);
+            v = string(box.Value);
+            if isempty(v)
+                t.refreshInputs();
+                error('prismt:app', 'Keep at least one %s selected.', ternary(what == "modalities", "signal", "channel group"));
+            end
+            if numel(v) == numel(items), v = []; else, v = cellstr(v); end   % all = the default
+            t.App.Controller.setValue("selection." + what, v);
+        end
+
         % ---- testing ------------------------------------------------------------------
         function buildTesting(t, parent)
             p = prismt.app.ui.panel(parent, "How the result is tested");
-            p.Layout.Row = 3;
+            p.Layout.Row = 4;
             g = prismt.app.ui.grid(p, {'fit', 'fit'}, {'fit', 240, '1x'});
             uilabel(g, 'Text', 'Test on');
-            t.Testing.testOn = uidropdown(g, 'Items', ["Automatic (recommended)", "New animals", "New sessions", "Held-out trials"], ...
+            t.Testing.testOn = uidropdown(g, 'Items', ["Automatic (recommended)", "New subjects", "New sessions", "Held-out trials"], ...
                 'ItemsData', ["auto", "subject", "session", "trial"], ...
-                'Tooltip', "Trials the model never trains on. New animals is the strictest and says whether the result generalizes.", ...
+                'Tooltip', "Trials the model never trains on. New subjects (animals, participants) is the strictest and says whether the result generalizes.", ...
                 'ValueChangedFcn', @(s, ~) t.App.safely(@() t.App.Controller.setValue("split.test_on", char(s.Value))));
-            t.Testing.note = prismt.app.ui.note(g, "Automatic tests on new animals when there are at least 3, else on " + ...
-                "new sessions. Held-out trials of the same sessions give optimistic results.");
+            t.Testing.note = prismt.app.ui.note(g, "Automatic tests on new subjects when there are at least 3, else on " + ...
+                "new sessions, with cross-validation so each is tested once. Held-out trials of the same sessions give optimistic results.");
             t.Testing.split = prismt.app.ui.text(g, "");
             t.Testing.split.Layout.Column = [1 3];
         end
@@ -411,4 +467,8 @@ end
 
 function s = onoff(tf)
 if tf, s = 'on'; else, s = 'off'; end
+end
+
+function v = ternary(c, a, b)
+if c, v = a; else, v = b; end
 end

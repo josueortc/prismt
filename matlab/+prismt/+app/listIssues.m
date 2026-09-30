@@ -120,7 +120,7 @@ end
 
 function w = plural(level)
 switch string(level)
-    case "subject", w = "animals";
+    case "subject", w = "subjects";
     case "session", w = "sessions";
     otherwise, w = "trials";
 end

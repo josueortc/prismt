@@ -20,7 +20,7 @@ classdef Dataset
     %     Times             time of each sample in seconds; Event says what time 0 is
     %     Trials            table with one row per trial (mouse, session, phase, stim, ...)
     %     ValueLabels       table (Column, Value, Label), e.g. stim 0 = "CS-"
-    %     Subject, Session  names of the Trials columns that identify animals and sessions
+    %     Subject, Session  names of the Trials columns that identify subjects (animals, participants) and sessions
     %
     %   Methods
     %     issues = validate(ds)   list every problem (struct array: Level, Code, Message, Hint, Field)
@@ -210,7 +210,7 @@ classdef Dataset
             end
             if strlength(ds.Subject) > 0 && ismember(ds.Subject, string(ds.Trials.Properties.VariableNames))
                 parts = parts + sprintf(" · %d %s", numel(unique(string(ds.Trials.(ds.Subject)))), ...
-                    plural(numel(unique(string(ds.Trials.(ds.Subject)))), "animal", "animals"));
+                    plural(numel(unique(string(ds.Trials.(ds.Subject)))), "subject", "subjects"));
             end
             if numel(ds.Times) > 1
                 parts = parts + sprintf(" · %.3g to %.3g s", ds.Times(1), ds.Times(end));

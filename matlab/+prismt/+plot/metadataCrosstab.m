@@ -1,6 +1,6 @@
 function T = metadataCrosstab(ax, ds, rowsBy, colsBy)
 %METADATACROSSTAB Trial counts for two trial columns (e.g. phase x mouse), shown as a grid.
-%   Empty cells (0 trials) are what to look for: a class missing from some animals, or a
+%   Empty cells (0 trials) are what to look for: a class missing from some subjects, or a
 %   column that fully determines the label (a confound). Returns the counts as a table.
 a = labelsOf(ds, rowsBy); b = labelsOf(ds, colsBy);
 [ra, ~, ia] = unique(a); [cb, ~, ib] = unique(b);

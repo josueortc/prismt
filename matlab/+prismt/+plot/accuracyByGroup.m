@@ -1,7 +1,7 @@
 function accuracyByGroup(ax, R, level)
-%ACCURACYBYGROUP Test accuracy of each animal (or session), with chance marked.
-%   One dot per animal shows how much the result depends on individuals; trials of one
-%   animal are not independent, so this spread matters more than the trial count.
+%ACCURACYBYGROUP Test accuracy of each subject (or session), with chance marked.
+%   One dot per subject shows how much the result depends on individuals; trials of one
+%   subject are not independent, so this spread matters more than the trial count.
 arguments
     ax
     R struct

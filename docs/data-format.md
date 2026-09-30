@@ -20,10 +20,11 @@ Then **`prismt.writeDataset(ds, "mydata_prismt.mat")`** saves it, and
 | Term | Meaning | Examples |
 |---|---|---|
 | **trial** | one repetition of your task; one row of metadata | a stimulus presentation |
-| **channel** | one recorded unit of space | a cortical region, a grid tile, a pixel group, a behavior variable |
+| **channel** | one thing recorded over time | a cortical region, an electrode, a grid tile, a behavior variable (speed, pupil, a paw coordinate), a physiological signal |
 | **time** | samples within a trial, the same for every trial | 41 frames at 10 Hz, from −1.1 s to 2.9 s |
 | **modality** | a kind of signal recorded on (some of) the channels | calcium, acetylcholine, running speed |
-| **subject** | the animal a trial came from | mouse `HB051` |
+| **subject** | the animal or participant a trial came from | mouse `HB051` |
+| **channel group** | an optional label per channel | `left`/`right`, a brain area, `arm`/`eye` for sensors |
 | **session** | the recording session a trial came from | day 3 of learning |
 
 Channels of different modalities do not have to match: a dataset can have 82 calcium
@@ -51,9 +52,19 @@ prismt.writeDataset(ds, "mydata_prismt.mat");
   `X = cat(4, calcium, ach)` with `ModalityNames=["calcium","ach"]`.
 - Use `NaN` for anything missing. PRISMT never trains on, or scores, a missing value.
 
-**Always mark the subject.** Trials from the same animal are not independent. With
-`Subject` set, PRISMT keeps animals separate between training and testing, so accuracy
-means "works on a new animal", not "recognized an animal it has seen".
+**Always mark the subject.** Trials from the same subject are not independent. With
+`Subject` set, PRISMT keeps subjects separate between training and testing, so accuracy
+means "works on a new subject", not "recognized a subject it has seen".
+
+**Recordings with different channels.** Make one dataset per recording and join them with
+`prismt.combineDatasets({ds1, ds2, ...})`: channels and signals are matched by name, a
+channel a recording lacks is missing (`NaN`) for its trials, and trial columns are joined.
+Different time axes need `Resample=true`. The Data tab's *Add dataset...* does the same.
+
+**Signals that are not brain activity** are handled the same way: give them a name, units and
+a kind (`ModalityKinds`, any short text such as `neural`, `behavior`, `physiology`,
+`stimulus`). Each channel of each signal is normalized separately (on training trials), so
+signals in different units can be combined.
 
 ## The file itself
 
@@ -82,6 +93,7 @@ stored as `[N R T]`. `meta_json.shape` is always the full size.
     "names": ["ch01", "..."],
     "x": [1, 2, "..."] , "y": [1, 1, "..."],
     "hemisphere": ["L", "R", "..."],
+    "groups": ["left", "right", "..."],
     "atlas": "grid82"
   },
   "modalities": {

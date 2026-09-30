@@ -1,6 +1,6 @@
 # Reading the results, and the pitfalls PRISMT guards against
 
-A transformer can reach a high score for the wrong reason: it recognizes the animal, the
+A transformer can reach a high score for the wrong reason: it recognizes the subject, the
 session, or where data are missing, instead of the condition you care about. This page says
 what each number means, what PRISMT does to keep it honest, and what is still up to you.
 
@@ -41,33 +41,37 @@ information is there, but no complex model is needed to read it out. The quick p
 also deliberately small; train longer or use the Standard preset before concluding the
 transformer cannot do better.
 
-## Testing on new animals
+## Testing on new subjects
 
-Trials of one animal (and one session) are not independent: they share the animal's
-anatomy, the imaging quality, the day's arousal. A model tested on held-out *trials* of
-animals it trained on can score high by recognizing each animal. Tested on *new animals*,
-the score says whether the effect generalizes.
+Trials of one subject (an animal, a participant) and of one session are not independent:
+they share the subject's anatomy, the recording quality, the day's arousal. A model tested
+on held-out *trials* of subjects it trained on can score high by recognizing each subject.
+Tested on *new subjects*, the score says whether the effect generalizes.
 
-- **Test on: Automatic** (the default) tests on new animals when there are at least three,
+- **Test on: Automatic** (the default) tests on new subjects when there are at least three,
   else on new sessions, else on held-out trials, and the Checks say which it chose.
 - If a label is the same for all trials of a session (like `phase`: a whole session is
-  early or late), testing on held-out trials or sessions of the same animals would let the
+  early or late), testing on held-out trials or sessions of the same subjects would let the
   model recognize sessions. PRISMT refuses this (error `E_LEAKY_SPLIT`, with the fix). It
   can be overridden (`split.allow_leaky`), but the run is then flagged `leaky_split` and
   its scores are marked as inflated.
 - Without a subject column, PRISMT warns that the score only shows the model works on
-  held-out trials, not on new animals.
+  held-out trials, not on new subjects.
 
-## Few animals: cross-validation
+## Cross-validation (the default)
 
-With fewer than 10 animals, one test split would contain only one or two of them, so
-PRISMT uses cross-validation instead: with 6–9 animals, 5 folds; with 3–5 animals, *leave
-one out*, where each animal is the test set once. The headline score pools the test
-predictions of all folds; the summary also gives the mean ± sd across folds.
+A single test set of a few subjects gives a score that depends on which subjects happened
+to be in it (with 11 mice, a 20% test set is two mice). So PRISMT cross-validates by
+default: with 6 or more subjects (or sessions, or trials, depending on *Test on*), 5 folds;
+with 3–5, *leave one out*. Every subject is then tested exactly once, by a model that never
+saw it. The headline score pools the test predictions of all folds; the summary also gives
+the mean ± sd across folds. Cross-validation trains one model per fold, so it takes about
+5 times longer than a single split; `split.folds = 1` gives a single split when speed
+matters more (on a cluster the folds run in parallel).
 
-Look at **Accuracy per animal**: one dot per animal shows whether the effect holds in most
-animals or comes from one or two. With four animals, a score of 0.7 can mean "every
-animal about 0.7" or "two at 0.9 and two at chance"; these support very different
+Look at **Accuracy per subject**: one dot per subject shows whether the effect holds in most
+subjects or comes from one or two. With four subjects, a score of 0.7 can mean "every
+subject about 0.7" or "two at 0.9 and two at chance"; these support very different
 conclusions.
 
 ## Confounds
@@ -112,7 +116,7 @@ folds by the final retraining.
 With few test trials, a score well above 1/number of classes can still happen by chance.
 `baselines.permutations` (e.g. 200) refits logistic regression with shuffled training
 labels, on the same split, to give the scores reached when there is no effect. When the
-label is the same for whole sessions or animals, whole sessions or animals are shuffled, so
+label is the same for whole sessions or subjects, whole sessions or subjects are shuffled, so
 the comparison keeps the data's structure. The run then reports the chance level for your
 data (the 95th percentile is drawn in *Score vs reference models*) and a p-value for the
 transformer's score. It is slow for large datasets, so it is off by default.

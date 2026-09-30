@@ -38,6 +38,10 @@ function [ds, report] = importData(source, opts)
 %                   Behavior columns are always of kind "behavior"
 %     ModalityNames names of the signals (default: the names of the variables in the file)
 %
+%   [~, info] = prismt.importData(file, Inspect=true) only reads what the file contains
+%   (signals and their sizes, behavior columns, trial columns, timing) without importing;
+%   the app uses it to offer the import options.
+%
 %   Sessions with different numbers of channels are accepted: channels are matched by name
 %   when the table has a per-session list of names (a column of string arrays), otherwise by
 %   position. To join recordings of different kinds, import each and use
@@ -59,6 +63,7 @@ arguments
     opts.Atlas (1, 1) string = ""
     opts.Event (1, 1) string = ""
     opts.Kind (1, 1) string = "signal"
+    opts.Inspect (1, 1) logical = false
     opts.SamplingRate double = []
     opts.TimeZero double = []
     opts.Subject (1, 1) string = "mouse"
@@ -72,6 +77,7 @@ switch kind
     case "prismt"
         ds = prismt.loadDataset(file);
         report = struct('kind', kind, 'notes', "Already a PRISMT dataset.", 'plan', "");
+        if opts.Inspect, ds = []; end
         return
     case "table"
         parts = prismt.import.fromTable(S, opts);
@@ -85,6 +91,30 @@ switch kind
         error('prismt:E_IMPORT_UNKNOWN', ['%s: no recognizable data (it contains: %s). Build the dataset with ' ...
             'prismt.makeDataset(X, trialTable, ...) instead.'], file, strjoin(string(fieldnames(S))', ', '));
 end
+if opts.Inspect
+    ds = [];
+    report = inspectParts(kind, parts);
+    return
+end
 [ds, notes] = prismt.import.assemble(parts, opts, file);
 report = struct('kind', kind, 'notes', notes, 'plan', strjoin(notes, newline));
+end
+
+function info = inspectParts(kind, p)
+sig = string(fieldnames(p.signals));
+sizes = strings(numel(sig), 1);
+nS = 0; N = 0;
+for k = 1:numel(sig)
+    parts = p.signals.(sig(k));
+    nS = numel(parts);
+    sz = cell2mat(cellfun(@(x) [size(x, 1) size(x, 2) size(x, 3)], parts(:), 'UniformOutput', false));
+    N = sum(sz(:, 1));
+    ch = unique(sz(:, 2));
+    if isscalar(ch), chText = string(ch); else, chText = min(ch) + "-" + max(ch); end
+    sizes(k) = chText + " channels x " + strjoin(string(unique(sz(:, 3))'), "/") + " time points";
+end
+info = struct('kind', kind, 'signals', sig, 'signal_sizes', sizes, 'sessions', nS, 'trials', N, ...
+    'behavior', string(fieldnames(p.behavior)), 'trial_columns', string(fieldnames(p.trialCols)), ...
+    'session_columns', string(fieldnames(p.sessionCols)), 'fs', p.fs, 't0', p.t0, 'event', p.event, ...
+    'atlas_hint', p.atlasHint, 'channel_names', ~isempty(p.channelNames), 'notes', p.notes(:));
 end

@@ -1,11 +1,14 @@
 # PRISMT
 
-PRISMT trains transformer models on trial-based recordings (widefield calcium imaging,
-other neural signals, behavior) from MATLAB, without needing to know about GPUs, clusters,
-hyperparameter tuning or transformers. It can:
+PRISMT trains transformer models on trial-based recordings from MATLAB, without needing to
+know about GPUs, clusters, hyperparameter tuning or transformers. A recording can be any set
+of signals over time: brain activity (imaging, electrodes), behavior (running speed, pupil,
+body-part positions), physiology, or stimulus traces, alone or together, with any number of
+channels. It can:
 
 - **classify trial conditions** (e.g. CS+ vs CS−, early vs late learning, hit vs miss) and
-  test the classifier on animals it never saw;
+  test the classifier on subjects (animals, participants) it never saw, with
+  cross-validation so every subject is tested once;
 - **learn the structure of the signals** with a masked autoencoder: hide part of each trial,
   predict it from the rest, and see which channels, times and signals are predictable;
 - **combine the two**: start a classifier from a trained autoencoder when labelled trials are few.
@@ -37,7 +40,7 @@ You need MATLAB R2021a or newer (no toolboxes) and about 3 GB of disk space.
    **Check settings**. The Checks list says how trials will be split for testing.
 3. **Run** tab > **Start training**. MATLAB stays usable; the learning curves update live.
 4. **Results** tab: the score against the reference models, the confusion matrix, accuracy
-   per animal, and more.
+   per subject, and more.
 
 Then try **Learn structure (masked autoencoder)** on the same data, and open
 *Predictability per channel* in the results.
@@ -47,7 +50,8 @@ The full walk-through, including your own data, is in [docs/tutorial.md](docs/tu
 ## Your own data
 
 The **Data** tab imports the lab's `tableForModeling` tables, `processed_data` /
-`standardized_data` structs, numbered-variable files and CDKL5 recordings, or any
+`standardized_data` structs, numbered-variable files and CDKL5 recordings (with options for
+which signals to use, how channels are split into signals, and behavior columns), or any
 arrays with `prismt.makeDataset`:
 
 ```matlab
@@ -58,7 +62,11 @@ ds = prismt.makeDataset(X, trials, SamplingRate=10, TimeZero=-1, ...
 prismt.writeDataset(ds, "mydata_prismt.mat");
 ```
 
-What a dataset file contains is described in [docs/data-format.md](docs/data-format.md).
+Each signal can have its own channels (e.g. 64 electrodes and 3 behavior variables), channels
+can be given groups (areas, sides, sensors) to train on some of them, and recordings whose
+channels differ are joined with **Add dataset...** or `prismt.combineDatasets` (channels are
+matched by name; missing ones are skipped by the model). What a dataset file contains is
+described in [docs/data-format.md](docs/data-format.md).
 
 ## Scripts instead of the app
 

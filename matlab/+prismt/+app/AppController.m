@@ -104,6 +104,51 @@ classdef AppController < handle
             c.datasetChanged();
         end
 
+        function info = inspectFile(c, file) %#ok<INUSL>
+            %INSPECTFILE What a lab file contains (signals, behavior columns, timing), without importing.
+            [~, info] = prismt.importData(file, Inspect=true);
+        end
+
+        function [ds, rep] = previewImport(~, file, opts)
+            %PREVIEWIMPORT Import in memory with options (name-value cell), to check before saving.
+            [ds, rep] = prismt.importData(file, opts{:});
+        end
+
+        function notes = addDatasets(c, files)
+            %ADDDATASETS Combine the current dataset with other PRISMT datasets (channels,
+            %signals and trial columns matched by name) and use the result.
+            if isempty(c.Dataset), error('prismt:app', 'Open a dataset first.'); end
+            files = string(files);
+            parts = [{c.Dataset}; arrayfun(@(f) prismt.loadDataset(f), files(:), 'UniformOutput', false)];
+            [~, names] = arrayfun(@fileparts, [c.DatasetFile; files(:)]);
+            names = erase(names, "_prismt");
+            [ds, notes] = prismt.combineDatasets(parts, Source="source_dataset", Names=matlab.lang.makeUniqueStrings(names));
+            out = fullfile(prismt.internal.projectFolder(), "datasets", names(1) + "_combined_prismt.mat");
+            out = uniqueFile(out);
+            prismt.writeDataset(ds, out);
+            c.Dataset = prismt.loadDataset(out);
+            c.DatasetFile = out;
+            c.ImportNotes = [notes(:); "Saved as " + out];
+            c.datasetChanged();
+        end
+
+        function setChannelGroups(c, groups)
+            %SETCHANNELGROUPS Give each channel a group (e.g. area, side, sensor) and save the dataset.
+            ds = c.Dataset;
+            groups = strtrim(string(groups(:)));
+            if numel(groups) ~= ds.R, error('prismt:app', 'Give one group per channel (%d).', ds.R); end
+            ds.ChannelGroups = groups;
+            prismt.writeDataset(ds, c.DatasetFile);
+            c.Dataset = prismt.loadDataset(c.DatasetFile);
+            c.ImportNotes = [c.ImportNotes(:); "Channel groups saved: " + strjoin(unique(groups(strlength(groups) > 0))', ", ")];
+            if isfield(c.Config, 'selection') && isfield(c.Config.selection, 'channel_groups')
+                c.Config.selection = rmfield(c.Config.selection, 'channel_groups');
+            end
+            c.Check = [];
+            notify(c, 'DataChanged');
+            notify(c, 'ConfigChanged');
+        end
+
         function useDemo(c, profile)
             if nargin < 2, profile = "fast"; end
             [ds, truth] = prismt.demo.makeSyntheticDataset(Profile=profile);
@@ -235,8 +280,8 @@ classdef AppController < handle
         end
 
         function T = classCounts(c)
-            %CLASSCOUNTS Trials and animals for each value of the label column (after filters).
-            T = table(strings(0, 1), zeros(0, 1), zeros(0, 1), 'VariableNames', {'Value', 'Trials', 'Animals'});
+            %CLASSCOUNTS Trials and subjects for each value of the label column (after filters).
+            T = table(strings(0, 1), zeros(0, 1), zeros(0, 1), 'VariableNames', {'Value', 'Trials', 'Subjects'});
             col = string(c.value("labels.column", ""));
             if isempty(c.Dataset) || strlength(col) == 0 || ~ismember(col, string(c.Dataset.Trials.Properties.VariableNames))
                 return
@@ -247,12 +292,12 @@ classdef AppController < handle
             vals = unique(g(keep & ~ismissing(g)), 'stable');
             vals = sort(vals);
             n = arrayfun(@(v) nnz(keep & g == v), vals);
-            animals = zeros(size(vals));
+            subjects = zeros(size(vals));
             if strlength(ds.Subject)
                 s = string(ds.Trials.(ds.Subject));
-                animals = arrayfun(@(v) numel(unique(s(keep & g == v))), vals);
+                subjects = arrayfun(@(v) numel(unique(s(keep & g == v))), vals);
             end
-            T = table(vals(:), n(:), animals(:), 'VariableNames', {'Value', 'Trials', 'Animals'});
+            T = table(vals(:), n(:), subjects(:), 'VariableNames', {'Value', 'Trials', 'Subjects'});
         end
 
         % ---- Running ------------------------------------------------------------------
@@ -318,11 +363,23 @@ classdef AppController < handle
 
     methods (Access = private)
         function datasetChanged(c)
+            if isfield(c.Config, 'selection')
+                for f = ["modalities", "channel_groups", "channels"]
+                    if isfield(c.Config.selection, f), c.Config.selection = rmfield(c.Config.selection, f); end
+                end
+            end
             ds = c.Dataset;
             cols = string(ds.Trials.Properties.VariableNames);
             label = string(c.value("labels.column", ""));
             if ~ismember(label, cols)
-                pick = intersect(["phase", "stim", "genotype", "response"], cols, 'stable');
+                pick = intersect(["phase", "stim", "condition", "genotype", "response"], cols, 'stable');
+                if isempty(pick)
+                    % otherwise the first column with a few values that is not subject or session
+                    for v = setdiff(prismt.app.ui.columnChoices(ds), [ds.Subject, ds.Session], 'stable')
+                        n = numel(unique(prismt.app.ui.labels(ds, v)));
+                        if n >= 2 && n <= 10, pick = v; break, end
+                    end
+                end
                 if ~isempty(pick), c.Config.labels.column = char(pick(1)); else, c.Config.labels.column = ''; end
                 c.Config.labels.classes = {};
             end
@@ -337,6 +394,16 @@ classdef AppController < handle
             notify(c, 'ConfigChanged');
         end
     end
+end
+
+function f = uniqueFile(f)
+% f, or f with _2, _3... added so an existing file is never overwritten.
+[d, n, e] = fileparts(f);
+k = 1;
+while isfile(f)
+    k = k + 1;
+    f = fullfile(d, n + "_" + k + e);
+end
 end
 
 function out = uniform(list, names)

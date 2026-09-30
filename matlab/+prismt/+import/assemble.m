@@ -196,7 +196,9 @@ if strlength(sessionCol) == 0
 end
 trials = struct2table(cols);
 subject = opts.Subject;
-if ~ismember(subject, string(trials.Properties.VariableNames))
+if strlength(subject) == 0
+    notes(end + 1) = "No subject column: subjects cannot be kept apart between training and testing.";
+elseif ~ismember(subject, string(trials.Properties.VariableNames))
     notes(end + 1) = "No '" + subject + "' column: subjects cannot be kept apart between training and testing (set Subject).";
     subject = "";
 end

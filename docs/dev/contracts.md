@@ -21,6 +21,8 @@ Specified for users in [../data-format.md](../data-format.md). For implementers:
   `meta.orientation_probes` (values of `X` at a few 0-based indices, computed by MATLAB)
   are checked after the transpose, so an orientation mistake fails loudly instead of
   silently permuting channels and time.
+- `channels.groups` (optional): one text per channel ("" for none); `modalities.kinds`: any
+  non-empty text (usual values: neural, behavior, physiology, stimulus, signal, other).
 - Text is stored as `uint8` UTF-8, never as MATLAB `char` (UTF-16 in HDF5 and awkward in
   h5py).
 - `Inf` is an error (reported with the MATLAB index); `NaN` means missing.

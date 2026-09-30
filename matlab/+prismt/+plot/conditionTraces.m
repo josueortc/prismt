@@ -2,8 +2,8 @@ function conditionTraces(ax, ds, by, opts)
 %CONDITIONTRACES Mean +/- SEM over trials, one line per condition, for some channels.
 %
 %   prismt.plot.conditionTraces(ax, ds, "stim", Channels=["ch09","ch10"], Modality="calcium")
-%   Channels are averaged together. SEM is computed across animals when a subject
-%   column is set (each animal contributes its mean), otherwise across trials.
+%   Channels are averaged together. SEM is computed across subjects when a subject
+%   column is set (each subject contributes its mean), otherwise across trials.
 arguments
     ax
     ds (1, 1) prismt.Dataset

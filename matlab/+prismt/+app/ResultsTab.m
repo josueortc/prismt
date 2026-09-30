@@ -17,7 +17,7 @@ classdef ResultsTab < handle
     end
     properties (Constant)
         ClassifyPlots = ["Score vs reference models", "Learning curves", "Confusion matrix", ...
-            "Accuracy per animal", "Accuracy per session", "Confidence", "Summary space (embedding)"]
+            "Accuracy per subject", "Accuracy per session", "Confidence", "Summary space (embedding)"]
         MaePlots = ["Score vs reference models", "Learning curves", "Reconstruction example", ...
             "Predictability per channel", "Gain over baseline per channel", "Predictability by condition", ...
             "Summary space (embedding)"]
@@ -240,7 +240,7 @@ classdef ResultsTab < handle
                         prismt.plot.learningCurves(ax, R);
                     end
                 case "Confusion matrix", prismt.plot.confusion(ax, R, Normalize=(opt ~= "Counts"));
-                case "Accuracy per animal", prismt.plot.accuracyByGroup(ax, R, "subject");
+                case "Accuracy per subject", prismt.plot.accuracyByGroup(ax, R, "subject");
                 case "Accuracy per session", prismt.plot.accuracyByGroup(ax, R, "session");
                 case "Confidence", prismt.plot.probabilities(ax, R);
                 case "Reconstruction example", prismt.plot.reconExample([axs{:}], R, Modality=opt);

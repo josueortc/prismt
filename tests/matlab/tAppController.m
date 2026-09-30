@@ -28,7 +28,7 @@ classdef tAppController < matlab.unittest.TestCase
             T = c.classCounts();
             tc.verifyEqual(T.Value, ["early"; "late"]);
             tc.verifyEqual(sum(T.Trials), c.Dataset.N);
-            tc.verifyEqual(T.Animals, [4; 4]);
+            tc.verifyEqual(T.Subjects, [4; 4]);
         end
 
         function tasksSwitchCleanly(tc)
@@ -99,6 +99,31 @@ classdef tAppController < matlab.unittest.TestCase
             eval(strjoin(lines(1:stop - 1), newline));
             want = c.runConfig();
             tc.verifyEqual(jsondecode(jsonencode(cfg)), jsondecode(jsonencode(want))); %#ok<NODEF>
+        end
+
+        function signalsGroupsAndCombining(tc)
+            c = tc.C;
+            ds = c.Dataset;
+            groups = repmat("front", ds.R, 1); groups(end - 1:end) = "back";
+            c.setChannelGroups(groups);
+            tc.verifyEqual(c.Dataset.ChannelGroups, groups, "saved in the dataset file");
+            tc.verifyEqual(prismt.loadDataset(c.DatasetFile).ChannelGroups, groups);
+            c.setValue("selection.channel_groups", {'back'});
+            c.setValue("selection.modalities", {'ach'});
+            cfg = c.runConfig();
+            tc.verifyEqual(string(cfg.selection.channel_groups), "back");
+            % another recording with other channels, joined by name
+            X = rand(10, 2, ds.T, 1);
+            other = prismt.makeDataset(X, table(repmat("M99", 10, 1), repmat("early", 10, 1), 'VariableNames', {'mouse', 'phase'}), ...
+                Times=ds.Times, ChannelNames=["extra1", "extra2"], ModalityNames="emg", ModalityKinds="physiology", Subject="mouse");
+            f = prismt.writeDataset(other, fullfile(tc.Dir, "other.mat"));
+            notes = c.addDatasets(f);
+            tc.verifyEqual(c.Dataset.N, ds.N + 10);
+            tc.verifyEqual(c.Dataset.ModalityNames, [ds.ModalityNames; "emg"]);
+            tc.verifyEqual(c.Dataset.R, ds.R + 2);
+            tc.verifyTrue(any(contains(notes, "lacks")));
+            tc.verifyTrue(ismember("source_dataset", string(c.Dataset.Trials.Properties.VariableNames)));
+            tc.verifyFalse(isfield(c.Config.selection, 'modalities'), "a new dataset resets the signal choice");
         end
 
         function toCodeRoundTrips(tc)

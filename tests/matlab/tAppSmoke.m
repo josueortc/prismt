@@ -167,6 +167,64 @@ classdef (TestTags = {'UI', 'Python'}) tAppSmoke < matlab.unittest.TestCase
             tc.verifySubstring(string(tr.PresetNote.Text), "Custom");
             tc.C.setValue("model", []);
         end
+
+        function g_importWithOptionsChannelsAndSignals(tc)
+            % A lab table: sessions with different channel counts, channels in 2 blocks
+            % (two signals), and a behavior time series.
+            T = 6;
+            sess = {rand(8, 4, T); rand(6, 4, T); rand(8, 6, T); rand(7, 6, T); rand(8, 4, T); rand(6, 6, T)};
+            n = cellfun(@(x) size(x, 1), sess);
+            cond = arrayfun(@(k) double(rand(k, 1) > 0.5), n, 'UniformOutput', false);
+            speed = arrayfun(@(k) rand(k, T), n, 'UniformOutput', false);
+            who = {'a'; 'a'; 'b'; 'b'; 'c'; 'c'};
+            tbl = table(sess, cond, speed, who, 'VariableNames', {'lfp', 'go', 'speed', 'rat'});
+            f = fullfile(tc.Dir, "lab_table.mat");
+            T = tbl; save(f, 'T');
+            d = tc.App.show("Data");
+            d.startImport(f);
+            tc.verifyEqual(string(d.Import.panel.Visible), "on");
+            tc.verifySubstring(string(d.Import.contains.Text), "4-6 channels");
+            tc.verifyEqual(string(d.Import.subject.Value), "rat", "the subject column is recognized");
+            d.Import.behavior.Value = {'speed'};
+            d.Import.kind.Value = "neural";
+            d.Import.fs.Value = 20;
+            d.Import.event.Value = "lever press";
+            d.previewImport();
+            tc.verifySubstring(string(d.Import.result.Text), "speed");
+            tc.shot("02_data_import_options");
+            d.saveImport();
+            ds = tc.C.Dataset;
+            tc.verifyEqual(ds.ModalityNames, ["lfp"; "behavior"]);
+            tc.verifyEqual(ds.ModalityKinds, ["neural"; "behavior"]);
+            tc.verifyEqual(ds.Event, "lever press");
+            tc.verifyEqual(ds.Subject, "rat");
+            tc.verifyTrue(all(isnan(ds.X(1:8, 5:6, :, 1)), 'all'), "session 1 has 4 of the 6 channels");
+            % channel groups on the Channels tab
+            data = d.Channels.table.Data;
+            data(1:3, 3) = {'left'}; data(4:6, 3) = {'right'};
+            d.Channels.table.Data = data;
+            d.saveGroups();
+            tc.verifyEqual(tc.C.Dataset.ChannelGroups(1:6), ["left"; "left"; "left"; "right"; "right"; "right"]);
+            d.Previews.SelectedTab = d.Previews.Children(6);
+            tc.shot("02_data_channels");
+            % choose signals and groups on the Task tab, then check with Python
+            t = tc.App.show("Task");
+            tc.C.setTask("classify");
+            tc.C.setLabel("go");
+            tc.verifyEqual(string(t.Inputs.groups.Visible), "on");
+            t.Inputs.groups.Value = {'left'};
+            t.Inputs.groups.ValueChangedFcn(t.Inputs.groups, []);
+            t.Inputs.signals.Value = {'lfp'};
+            t.Inputs.signals.ValueChangedFcn(t.Inputs.signals, []);
+            tc.verifySubstring(string(t.Inputs.using.Text), "1 of 2 signals and 3 of 7 channels");
+            t.Checks.runCheck();
+            r = tc.C.Check;
+            tc.verifyTrue(r.ok, strjoin([t.Checks.Items.message], " | "));
+            tc.verifyEqual(string(r.selection.channels(:))', ["ch01", "ch02", "ch03"]);
+            tc.verifyEqual(string(r.selection.modalities), "lfp");
+            tc.verifyEqual(string(r.split.scheme), "loo", "3 subjects: every one tested once");
+            tc.shot("03_task_channels_and_signals");
+        end
     end
 
     methods

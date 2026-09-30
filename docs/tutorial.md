@@ -40,23 +40,43 @@ check that PRISMT finds them:
 - on CS+ trials, two bottom-left channels respond (classify `stim` to find it);
 - in late sessions, two top-right channels show an ACh response (classify `phase`).
 
-The **Summary** lists trials, channels, time points, signals, animals and sessions, and
+The **Summary** lists trials, channels, time points, signals, subjects and sessions, and
 **Problems found** lists anything wrong with the file. The previews show the data before
 any model is trained:
 
 | Preview | Use it to check |
 |---|---|
 | Average | The trial-averaged signal of every channel. *Compare* shows the difference between two groups of trials (e.g. late minus early). |
-| Conditions | Mean ± SEM over time for chosen channels, one line per condition (SEM across animals). |
+| Conditions | Mean ± SEM over time for chosen channels, one line per condition (SEM across subjects). |
 | Single trial | One trial at a time, with its trial information. |
 | Channel map | One value per channel on the atlas or channel positions: the average signal, or how much data is missing. |
-| Trial info | Trial counts for two columns (e.g. phase × mouse). Empty cells mean a condition is missing in some animals; see [pitfalls](results-and-pitfalls.md#confounds). |
+| Trial info | Trial counts for two columns (e.g. phase × mouse). Empty cells mean a condition is missing in some subjects; see [pitfalls](results-and-pitfalls.md#confounds). |
+| Channels | Every channel, the signals it has, how much is missing, and its **group**. Type groups (brain area, left/right, sensor, body part) and press *Save groups*; the Task tab can then use some groups only. |
+
+![Channels and their groups](figures/app/02_data_channels.png)
 
 **Your own data.** *Import lab file...* reads the lab's `tableForModeling` tables (one row
 per session, with a `meta` struct), `processed_data` / `standardized_data` structs,
-numbered-variable files and CDKL5 continuous recordings, and shows how it read the file
-before saving it. For other layouts, build the dataset in MATLAB and use *From
-workspace...*:
+numbered-variable files and CDKL5 continuous recordings. It first shows what the file
+contains and lets you choose how to read it:
+
+| Option | Use it for |
+|---|---|
+| Signal | Which recorded variable(s) to use; several become separate signals. |
+| Channels | *Each is one channel*, or split the channels into K signals *in blocks* (1..R/K, next R/K, ...) or *alternating* (1, K+1, ... / 2, K+2, ...), e.g. two indicators recorded on the same regions. |
+| Signal names, kind, units | E.g. `calcium, ach`, kind `neural`; for non-brain signals `physiology`, `behavior`, `stimulus` or any text. |
+| Behavior | Per-trial time series (running speed, licking, pupil...) added as a separate signal with its own channels. |
+| Subject column, timing | Which column identifies subjects; sampling rate, time of the first sample and what time 0 is, when the file does not say. |
+
+![Import options](figures/app/02_data_import_options.png)
+
+*Preview* reads the file with these options and says how it was read; *Save and use* saves
+it as a PRISMT dataset. Sessions with different numbers of channels are accepted (matched by
+name when the table lists each session's channel names, otherwise by position; channels a
+session lacks are missing). **Add dataset...** joins other PRISMT datasets to the open one,
+matching channels and signals by name: use it for recordings with different electrodes, or to
+add a signal recorded in another file. For other layouts, build the dataset in MATLAB and use
+*From workspace...*:
 
 ```matlab
 ds = prismt.makeDataset(X, trials, SamplingRate=10, TimeZero=-1, Subject="mouse", Session="session");
@@ -74,7 +94,7 @@ extra signal, atlas).
 Choose what to learn with the three buttons at the top.
 
 **Classify trial conditions.** *Predict* is the trial column to learn, e.g. `phase`. The
-class table lists its values with their trial and animal counts:
+class table lists its values with their trial and subject counts:
 
 - untick a value to leave it out;
 - give two values the same *Class name* to merge them (e.g. `hit` and `CR` as `correct`).
@@ -82,14 +102,22 @@ class table lists its values with their trial and animal counts:
 **Which trials** keeps only some trials (e.g. only CS+ trials, or some mice). The line under
 it says how many trials are used.
 
+![Which channels and signals](figures/app/03_task_channels_and_signals.png)
+
+**Which channels and signals** chooses what the model sees: some signals only (e.g. the
+neural signal without behavior, to ask whether it alone carries the information), and, when
+the dataset has channel groups, some groups only.
+
 **How the result is tested** decides which trials are kept aside to measure the score.
-*Automatic* tests on animals the model never saw when there are at least three, which is
-what makes a result generalize; see [why](results-and-pitfalls.md#testing-on-new-animals).
+*Automatic* tests on subjects the model never saw when there are at least three, which is
+what makes a result generalize, and uses cross-validation so that every subject is tested
+exactly once (5 folds, or leave-one-out with 3–5 subjects); see
+[why](results-and-pitfalls.md#testing-on-new-subjects).
 
 The **Checks** list on the right says what is ready and what needs attention. Each item
 says how to fix it, and *Go to setting* jumps to the right place. Press **Check settings**:
 PRISMT then reports the classes, exactly how the trials will be split (for example "each
-of the 8 animals is tested once"), and the model size.
+of the 8 subjects is tested once"), and the model size.
 
 ![Task tab, masked autoencoder](figures/app/03_task_mae_random.png)
 
@@ -101,7 +129,7 @@ chosen for training, every run is scored on all these patterns.
 
 **Classify, starting from an autoencoder** reuses a finished autoencoder run as the starting
 point of a classifier (choose it under *Start from*). It keeps the autoencoder's split, so
-the test animals stay unseen.
+the test subjects stay unseen.
 
 ## 4. Model & training
 
@@ -165,7 +193,7 @@ reference models achieve on the same trials, and any warnings. *Show* picks a pl
 | Score vs reference models | Score vs reference models (R² for each hiding pattern) |
 | Learning curves | Learning curves |
 | Confusion matrix | Reconstruction example (original, what the model saw, reconstruction, error) |
-| Accuracy per animal / per session | Predictability per channel, and the gain over the best baseline |
+| Accuracy per subject / per session | Predictability per channel, and the gain over the best baseline |
 | Confidence (probability of the true class) | Predictability by condition (e.g. early vs late; exploratory) |
 | Summary space (embedding), coloured by any trial column | Summary space (embedding) |
 
