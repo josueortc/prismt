@@ -91,27 +91,36 @@ def select_device(requested: str = "auto") -> Any:
     return torch.device("cpu")
 
 
+_MPS_PROBE = """
+import torch
+a = torch.arange(12.0).reshape(3, 4)
+assert torch.allclose(a @ a.T, (a.to("mps") @ a.to("mps").T).cpu())
+torch.manual_seed(0)
+lin = torch.nn.Linear(16, 16).to("mps")
+x = torch.randn(2, 4, 8, 16, device="mps", requires_grad=True)
+q = lin(x)
+torch.nn.functional.scaled_dot_product_attention(q, q, q).sum().backward()
+assert torch.isfinite(x.grad).all().item()
+print("ok")
+"""
+
+
 @functools.lru_cache(maxsize=1)
 def _mps_works() -> bool:
     """True when the Apple GPU can run what training needs (a layer, attention, a backward
-    pass). Some virtual Macs report MPS as available but cannot allocate on it."""
+    pass). Some virtual Macs report MPS as available but fail or even crash on it, so the
+    probe runs in a child process. PRISMT_MPS=0 or 1 skips the probe."""
     import torch
 
     mps = getattr(torch.backends, "mps", None)
     if not (mps and mps.is_available()):
         return False
+    forced = os.environ.get("PRISMT_MPS")
+    if forced in ("0", "1"):
+        return forced == "1"
     try:
-        a = torch.arange(12.0).reshape(3, 4)
-        b = (a.to("mps") @ a.to("mps").T).cpu()
-        if not torch.allclose(a @ a.T, b):
-            return False
-        torch.manual_seed(0)
-        lin = torch.nn.Linear(16, 16).to("mps")
-        x = torch.randn(2, 4, 8, 16, device="mps", requires_grad=True)
-        q = lin(x)
-        out = torch.nn.functional.scaled_dot_product_attention(q, q, q)
-        out.sum().backward()
-        return bool(torch.isfinite(x.grad).all().item())
+        out = subprocess.run([sys.executable, "-c", _MPS_PROBE], capture_output=True, text=True, timeout=180)
+        return out.returncode == 0 and out.stdout.strip().endswith("ok")
     except Exception:  # noqa: BLE001 - any failure means "do not use MPS"
         return False
 

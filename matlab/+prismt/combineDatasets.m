@@ -61,8 +61,8 @@ T = numel(times);
 % ---- channels and signals, matched by name --------------------------------------------
 chan = strings(0, 1); mods = strings(0, 1);
 for k = 1:K
-    chan = [chan; setdiff(datasets{k}.ChannelNames, chan, 'stable')]; %#ok<AGROW>
-    mods = [mods; setdiff(datasets{k}.ModalityNames, mods, 'stable')]; %#ok<AGROW>
+    chan = [chan; col(setdiff(datasets{k}.ChannelNames, chan, 'stable'))]; %#ok<AGROW>
+    mods = [mods; col(setdiff(datasets{k}.ModalityNames, mods, 'stable'))]; %#ok<AGROW>
 end
 R = numel(chan); M = numel(mods);
 counts = cellfun(@(d) d.N, datasets(:));
@@ -114,7 +114,7 @@ chanSets = arrayfun(@(m) find(present(:, m)), (1:M)', 'UniformOutput', false);
 % ---- trials ----------------------------------------------------------------------------
 cols = strings(0, 1);
 for k = 1:K
-    cols = [cols; setdiff(string(datasets{k}.Trials.Properties.VariableNames)', cols, 'stable')]; %#ok<AGROW>
+    cols = [cols; col(setdiff(string(datasets{k}.Trials.Properties.VariableNames)', cols, 'stable'))]; %#ok<AGROW>
 end
 trials = table();
 for c = cols'
@@ -180,6 +180,11 @@ ds = prismt.makeDataset(X, trials, args{:});
 if K > 1
     notes = ["Combined " + K + " datasets: " + N + " trials, " + R + " channels, " + M + " signal(s)."; notes];
 end
+end
+
+function x = col(x)
+% A column (setdiff's output orientation differs between releases).
+x = x(:);
 end
 
 function v = iff(c, a, b)

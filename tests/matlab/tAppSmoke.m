@@ -229,7 +229,13 @@ classdef (TestTags = {'UI', 'Python'}) tAppSmoke < matlab.unittest.TestCase
 
     methods
         function shot(tc, name)
-            tc.App.exportFigure(fullfile(tc.Png, name + ".png"));
+            % Screenshots are for looking at the app; some releases cannot take them without
+            % a display (exportapp under -batch), and the test goes on without them.
+            try
+                tc.App.exportFigure(fullfile(tc.Png, name + ".png"));
+            catch err
+                if err.identifier ~= "MATLAB:print:HeadlessFigureUnsupported", rethrow(err); end
+            end
         end
 
         function s = waitForRun(tc)

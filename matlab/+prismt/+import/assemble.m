@@ -61,7 +61,7 @@ if isempty(perSession)
     unionNames = strings(0, 1);
 else
     unionNames = strings(0, 1);
-    for s = 1:nS, unionNames = [unionNames; setdiff(perSession{s}, unionNames, 'stable')]; end %#ok<AGROW>
+    for s = 1:nS, new = setdiff(perSession{s}, unionNames, 'stable'); unionNames = [unionNames; new(:)]; end %#ok<AGROW>
     R0 = numel(unionNames);
     where = cell(nS, 1);
     for s = 1:nS, [~, where{s}] = ismember(perSession{s}, unionNames); end
