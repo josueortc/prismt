@@ -35,7 +35,14 @@ def test_job_folder_contents(tmp_path, tiny_dataset):
         if script.endswith(".sbatch"):
             assert b'$(dirname "$0")' not in text and b"SLURM_SUBMIT_DIR" in text
     env = (job / "job.env").read_text()
-    assert "PRISMT_GPUS=0" in env and json.loads((job / "config.json").read_text())["output"]["root"] == "results"
+    cfg = json.loads((job / "config.json").read_text())
+    assert "PRISMT_GPUS=0" in env and cfg["output"]["root"] == "results"
+    # without a path on the cluster, the dataset travels inside the (movable) job folder
+    assert cfg["dataset"]["path"] == f"data/{tiny_dataset.name}" and (job / "data" / tiny_dataset.name).is_file()
+    remote = write_job_folder({"task": "classify", "dataset": {"path": str(tiny_dataset)}}, tmp_path / "r",
+                              {"gpus": 0}, dataset_remote="~/data/tiny.mat")
+    assert json.loads((remote / "config.json").read_text())["dataset"]["path"] == "~/data/tiny.mat"
+    assert not (remote / "data").exists()
 
 
 @pytest.mark.slow

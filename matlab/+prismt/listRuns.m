@@ -25,6 +25,11 @@ for folder = string(folders)
         rows(end + 1, :) = {string(items(k).name), task, string(st.state), started, summary, d}; %#ok<AGROW>
     end
 end
-T = cell2table(rows, 'VariableNames', {'Name', 'Task', 'State', 'Started', 'Summary', 'Folder'});
+names = {'Name', 'Task', 'State', 'Started', 'Summary', 'Folder'};
+if isempty(rows)
+    T = table('Size', [0 6], 'VariableTypes', repmat({'string'}, 1, 6), 'VariableNames', names);
+    return
+end
+T = cell2table(rows, 'VariableNames', names);
 if height(T), T = sortrows(T, 'Started', 'descend'); end
 end

@@ -1,19 +1,13 @@
-%% PRISMT Training Setup - Quick Launch
-% Double-click this file or run: run_prismt_gui
+%% PRISMT - open the app
+% Double-click this file in MATLAB's Current Folder, or type run_prismt_gui.
 %
-% Launches the PRISMT GUI for configuring transformer training on
-% widefield calcium imaging data. No need to change directory.
-%
-% Usage:
-%   run_prismt_gui          % from Command Window
-%   Double-click run_prismt_gui.m in Current Folder
+% The app walks through setup (Python), data, the task, training and results.
+% Everything it does can also be scripted: see matlab/examples/prismt_tutorial.m.
 
-% Add gui folder to path (allows running from project root)
-prismt_root = fileparts(mfilename('fullpath'));
-gui_dir = fullfile(prismt_root, 'gui');
-if exist(gui_dir, 'dir')
-    addpath(gui_dir);
+prismt_release = version('-release');
+if str2double(prismt_release(1:4)) < 2021
+    error('PRISMT needs MATLAB R2021a or newer (this is R%s).', prismt_release);
 end
-
-% Launch GUI
-prismt_training_setup();
+addpath(fullfile(fileparts(mfilename('fullpath')), 'matlab'));
+clear prismt_release
+prismt.gui();

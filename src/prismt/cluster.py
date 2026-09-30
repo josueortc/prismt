@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 from prismt import RESOURCES, __version__
+from prismt.errors import ConfigError
 
 TEMPLATES = RESOURCES / "cluster"
 SCRIPTS = ("common.sh", "setup_env.sh", "submit.sh", "summarize.sh", "train.sbatch", "hpo_worker.sbatch",
@@ -59,8 +60,28 @@ def write_job_folder(config: dict, out_dir: str | Path, profile: dict | None = N
         (job / script).write_bytes(text.replace("\r\n", "\n").encode("utf-8"))
         (job / script).chmod(0o755)
     cfg = json.loads(json.dumps(config))
-    if dataset_remote is not None:
+    if dataset_remote:
         cfg.setdefault("dataset", {})["path"] = dataset_remote
+    else:
+        # No path on the cluster given: ship the dataset inside the job folder (paths in
+        # config.json are relative to it, so the folder can be copied anywhere).
+        local = Path(cfg.get("dataset", {}).get("path") or "").expanduser()
+        if not local.is_file():
+            raise ConfigError("E_JOB_DATASET", f"The dataset file {local} was not found.",
+                              hint="Save the dataset first, or give its path on the cluster.", field="dataset.path")
+        (job / "data").mkdir()
+        shutil.copy2(local, job / "data" / local.name)
+        cfg["dataset"]["path"] = f"data/{local.name}"
+    init = (cfg.get("model") or {}).get("init_from")
+    if init:
+        # Fine-tuning starts from a local autoencoder run: ship it too.
+        src_run = Path(init).expanduser()
+        if not src_run.is_dir():
+            raise ConfigError("E_JOB_INIT", f"The autoencoder run {src_run} was not found.",
+                              hint="Choose a finished masked-autoencoder run.", field="model.init_from")
+        shutil.copytree(src_run, job / "init_from" / src_run.name,
+                        ignore=shutil.ignore_patterns("last.pt", "STOP", "*.tmp*"))
+        cfg["model"]["init_from"] = f"init_from/{src_run.name}"
     cfg.setdefault("output", {})["root"] = "results"
     (job / "config.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     src = Path(__file__).resolve().parent
