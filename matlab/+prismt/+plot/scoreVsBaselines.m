@@ -1,15 +1,17 @@
 function scoreVsBaselines(ax, R)
 %SCOREVSBASELINES The model's test score next to what simple reference models achieve.
 %   Classification: balanced accuracy of the transformer, logistic regression, always
-%   guessing the most common class, and chance. Masked autoencoder: R² of hidden values
+%   guessing the most common class, chance, and (when the run had baselines.permutations)
+%   the 95th percentile of logistic regression with shuffled labels. Masked autoencoder: R² of hidden values
 %   for each masking pattern, against the best simple baseline for that pattern.
 s = prismt.plot.style();
 prismt.plot.prepareAxes(ax);
 M = R.Metrics;
 if string(M.task) == "classify"
-    names = ["PRISMT", "logistic regression", "majority class", "chance"];
-    vals = [M.test.balanced_accuracy, NaN, M.baselines.majority.balanced_accuracy, M.baselines.chance.balanced_accuracy];
+    names = ["PRISMT", "logistic regression", "majority class", "shuffled labels (95th pct)", "chance"];
+    vals = [M.test.balanced_accuracy, NaN, M.baselines.majority.balanced_accuracy, NaN, M.baselines.chance.balanced_accuracy];
     if isfield(M.baselines, 'logistic'), vals(2) = M.baselines.logistic.balanced_accuracy; end
+    if isfield(M.baselines, 'shuffled_labels'), vals(4) = M.baselines.shuffled_labels.p95; end
     keep = ~isnan(vals); names = names(keep); vals = vals(keep);
     b = barh(ax, vals, 0.6, 'FaceColor', 'flat', 'EdgeColor', 'none');
     b.CData = repmat(s.muted * 0.4 + 0.6, numel(vals), 1); b.CData(1, :) = s.categorical(1, :);

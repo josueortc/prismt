@@ -52,7 +52,10 @@ def test_cross_validation_array_then_combine(tmp_path, tiny_dataset):
     job = write_job_folder(cfg, tmp_path, {"gpus": 0}, n_folds=4)
     out = submit(job, tmp_path)
     assert out.returncode == 0, out.stdout + out.stderr
-    assert "failed" not in (tmp_path / "slurm.log").read_text(), (job / "logs").iterdir()
+    log = (tmp_path / "slurm.log").read_text()
+    assert "failed" not in log, (job / "logs").iterdir()
+    assert "--signal B:USR1@300" in log, "training jobs must be warned before the time limit"
+    assert "summarize.sh" in (job / "README.txt").read_text()
     res = job / "results"
     assert sorted(p.name for p in res.glob("fold_*")) == ["fold_01", "fold_02", "fold_03", "fold_04"]
     assert not (res / "metrics.json").exists()

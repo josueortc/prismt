@@ -2,7 +2,7 @@
 # Fake sbatch for tests: runs the job script synchronously (each array task in turn),
 # with the environment Slurm would give it. Records every call in $FAKE_SLURM_LOG.
 set -e
-ARRAY=""; OUTPUT="slurm-%j.out"; CHDIR="$PWD"; PARSABLE=0; CPUS=1
+ARRAY=""; OUTPUT="slurm-%j.out"; CHDIR="$PWD"; PARSABLE=0; CPUS=1; ALL="$*"
 while [ $# -gt 0 ]; do
   case "$1" in
     --array) ARRAY="$2"; shift 2;;
@@ -16,6 +16,7 @@ while [ $# -gt 0 ]; do
 done
 JOB=$(( (RANDOM % 90000) + 10000 ))
 echo "sbatch $SCRIPT array=$ARRAY" >> "${FAKE_SLURM_LOG:-/dev/null}"
+echo "  options: $ALL" >> "${FAKE_SLURM_LOG:-/dev/null}"
 cd "$CHDIR"
 if [ -n "$ARRAY" ]; then
   LO=${ARRAY%-*}; HI=${ARRAY#*-}

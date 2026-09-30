@@ -1,0 +1,18 @@
+# Build the optional container images (not pushed anywhere; publishing needs a decision
+# about the registry first).
+name: docker
+on:
+  push:
+    paths: [docker/**, environment.yml, .github/workflows/docker.yml]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        variant: [cpu, cuda]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f docker/Dockerfile --build-arg VARIANT=${{ matrix.variant }} -t prismt:${{ matrix.variant }} .
+      - if: matrix.variant == 'cpu'
+        run: docker run --rm prismt:cpu doctor

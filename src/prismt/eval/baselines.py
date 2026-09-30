@@ -46,6 +46,32 @@ def logistic(F_train, y_train, F_val, y_val, F_test, n_classes: int, seed: int =
     return prob, {"C": best_c, "val_balanced_accuracy": float(best_score)}
 
 
+def permuted_labels(y: np.ndarray, groups: np.ndarray | None, rng: np.random.Generator) -> np.ndarray:
+    """Shuffle labels; when the label is constant within groups (sessions, animals), shuffle
+    whole groups, so the null keeps the data's structure (a trial-level shuffle would be too easy)."""
+    if groups is None:
+        return rng.permutation(y)
+    keys, inverse = np.unique(groups, return_inverse=True)
+    first = np.zeros(len(keys), dtype=int)
+    first[inverse[::-1]] = np.arange(len(y))[::-1]
+    return rng.permutation(y[first])[inverse]
+
+
+def permutation_predictions(F: np.ndarray, y: np.ndarray, fold, n_classes: int, n: int,
+                            groups: np.ndarray | None, seed: int = 0) -> np.ndarray:
+    """Test predictions [n, n_test] of logistic regression refitted ``n`` times with shuffled
+    training labels, for one fold. Pooled over folds, they give the chance level for this data,
+    split and model family."""
+    rng = np.random.default_rng([seed, 7919, fold.index])
+    tr = fold.train
+    out = np.empty((n, len(fold.test)), dtype=np.int64)
+    for k in range(n):
+        y_perm = permuted_labels(y[tr], None if groups is None else groups[tr], rng)
+        prob, _ = logistic(F[tr], y_perm, F[fold.val], y[fold.val], F[fold.test], n_classes, seed + k)
+        out[k] = prob.argmax(1)
+    return out
+
+
 def features(values: np.ndarray, valid: np.ndarray, max_features: int = 20000) -> tuple[np.ndarray, str]:
     """Flattened token values (missing = 0) for the linear baseline; time-averaged if too large."""
     V = np.where(valid[..., None], values, 0.0)

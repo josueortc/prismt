@@ -28,7 +28,9 @@ Then **`prismt.writeDataset(ds, "mydata_prismt.mat")`** saves it, and
 
 Channels of different modalities do not have to match: a dataset can have 82 calcium
 channels and 3 behavior channels. Each modality lists which channels exist for it
-(`ModalityChannels`), and the rest are filled with `NaN`.
+(`ModalityChannels`), and the rest are filled with `NaN`. The padding makes the file larger
+(82 calcium + 3 behavior channels are stored as 85 channels for each modality) but costs no
+training time: the model only sees the channels each modality actually has.
 
 ## Making a dataset from your own arrays (MATLAB)
 

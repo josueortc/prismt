@@ -98,11 +98,13 @@ def write_job_folder(config: dict, out_dir: str | Path, profile: dict | None = N
     }
     env = "".join(f"PRISMT_{k}={shlex.quote(str(v))}\n" for k, v in values.items())
     (job / "job.env").write_bytes(("# Resources for this job; edit if needed, then run: bash submit.sh\n" + env).encode())
-    (job / "README.txt").write_text(readme(job_name, prof, dataset_remote, job), encoding="utf-8")
+    (job / "README.txt").write_text(readme(job_name, prof, dataset_remote, job, n_folds=n_folds, mode=mode),
+                                     encoding="utf-8")
     return job
 
 
-def readme(job_name: str, prof: dict, dataset_remote: str | None, job: Path | None = None) -> str:
+def readme(job_name: str, prof: dict, dataset_remote: str | None, job: Path | None = None, *,
+           n_folds: int = 1, mode: str = "train") -> str:
     login = f"{prof['user']}@{prof['host']}" if prof["user"] and prof["host"] else "NETID@CLUSTER"
     root = prof["remote_root"]
     lines = [
@@ -123,6 +125,11 @@ def readme(job_name: str, prof: dict, dataset_remote: str | None, job: Path | No
         f"     bash {root}/{job_name}/submit.sh",
         "5. Check progress:",
         f"     squeue --me      tail -f {root}/{job_name}/logs/*.out",
+    ]
+    if mode == "train" and n_folds > 1:
+        lines += [f"   The {n_folds} cross-validation folds run as separate jobs. When all have finished, combine them:",
+                  f"     bash {root}/{job_name}/summarize.sh"]
+    lines += [
         "6. When finished, copy the results back (on your computer):",
         f"     rsync -av {login}:{root}/{job_name}/results/ \"{job or job_name}/results/\"",
         "   then open the job folder in the PRISMT app (Results tab).",

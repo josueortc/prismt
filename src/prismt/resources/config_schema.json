@@ -149,7 +149,7 @@
      "help": "Also fit logistic regression on the same trials, as a simple reference the transformer should match or beat."},
     {"path": "baselines.permutations", "type": "int", "min": 0, "max": 1000, "default": 0, "advanced": true,
      "label": "Shuffled-label repeats",
-     "help": "Also train this many times with shuffled labels to measure chance level for your data. Slow; best run on a cluster."},
+     "help": "Also refit the logistic-regression reference this many times with shuffled training labels (whole sessions or animals when the label is constant within them). Gives the chance level for your data and a p-value for the transformer's score. Classification only; slow for large datasets."},
 
     {"path": "output.root", "type": "path", "default": "runs", "label": "Runs folder",
      "help": "Each run gets its own folder inside this one."},

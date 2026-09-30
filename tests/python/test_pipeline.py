@@ -177,6 +177,31 @@ def test_classification_run_writes_the_contract(tmp_path, tiny_dataset):
     assert min(int(r["trial_index"]) for r in rows) >= 1
 
 
+def test_shuffled_labels_move_whole_groups():
+    from prismt.eval.baselines import permuted_labels
+
+    rng = np.random.default_rng(0)
+    groups = np.repeat(np.arange(10), 5)
+    y = np.repeat(np.arange(10) % 2, 5)           # label constant within each group
+    for _ in range(5):
+        p = permuted_labels(y, groups, rng)
+        assert all(len(set(p[groups == g])) == 1 for g in range(10)), "a group was split"
+        assert np.bincount(p).tolist() == np.bincount(y).tolist()
+    assert sorted(permuted_labels(y, None, rng)) == sorted(y)
+
+
+@pytest.mark.slow
+def test_shuffled_label_baseline_sits_at_chance(tmp_path, tiny_dataset):
+    out = run(cfg_for(tiny_dataset, output={"root": str(tmp_path)}, labels={"column": "stim"},
+                      baselines={"permutations": 20}))
+    m = json.loads((out / "metrics.json").read_text())
+    sh = m["baselines"]["shuffled_labels"]
+    assert sh["n"] == 20 and 0.3 < sh["balanced_accuracy"] < 0.7
+    assert 0 < sh["p_value_model"] <= 1 and sh["shuffled_by"] == "trial"
+    assert any("shuffled labels" in line for line in m["summary_lines"])
+    assert scipy.io.loadmat(out / "results.mat")["shuffled_null"].size == 20
+
+
 @pytest.mark.slow
 def test_mae_then_finetune(tmp_path, tiny_dataset):
     mae = run(cfg_for(tiny_dataset, task="mae", output={"root": str(tmp_path)}))

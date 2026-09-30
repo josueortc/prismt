@@ -452,6 +452,13 @@ def _evaluate_fold(prep: Prepared, fold: Fold, model, task, tensors, values, val
             base["logistic"] = {**classification_metrics(y[fold.test], prob, prep.n_classes), **info,
                                 "features": desc}
             extras["logistic_prob"] = prob
+            if cfg["baselines"]["permutations"]:
+                from prismt.eval.baselines import permutation_predictions
+
+                groups = {"session": prep.session, "subject": prep.subject}.get(prep.plan.label_level)
+                extras["null_pred"] = permutation_predictions(F, y, fold, prep.n_classes,
+                                                              int(cfg["baselines"]["permutations"]), groups,
+                                                              cfg["train"]["seed"])
         extras["baselines"] = base
         if cfg["output"]["save_embeddings"]:
             extras["embedding"] = task.predict(model, tensors, fold.test, bs)["embedding"]
@@ -612,9 +619,25 @@ def _collect(prep: Prepared, outcomes: list[FoldOutcome]) -> tuple[dict, dict]:
             baselines["logistic"] = classification_metrics(y, lp, C)
             mat["logistic_prob"] = lp
         ba = test["balanced_accuracy"]
+        if all("null_pred" in o.extras for o in outcomes) and "logistic" in baselines:
+            from sklearn.metrics import balanced_accuracy_score
+
+            pooled = np.concatenate([o.extras["null_pred"] for o in outcomes], axis=1)
+            null = np.array([balanced_accuracy_score(y, row) for row in pooled])
+            p_model = float((1 + np.sum(null >= ba)) / (1 + len(null)))
+            p_log = float((1 + np.sum(null >= baselines["logistic"]["balanced_accuracy"])) / (1 + len(null)))
+            baselines["shuffled_labels"] = {
+                "balanced_accuracy": float(np.mean(null)), "p95": float(np.quantile(null, 0.95)),
+                "n": int(len(null)), "shuffled_by": prep.plan.label_level, "p_value_model": p_model,
+                "p_value_logistic": p_log, "description": "logistic regression refitted with shuffled training labels"}
+            mat["shuffled_null"] = null
         lines = [f"Balanced accuracy on {what}: {ba:.2f} (chance {1 / C:.2f}), from {how}."]
         if "logistic" in baselines:
             lines.append(f"Logistic regression on the same trials: {baselines['logistic']['balanced_accuracy']:.2f}.")
+        if "shuffled_labels" in baselines:
+            sh = baselines["shuffled_labels"]
+            lines.append(f"With shuffled labels ({sh['n']} repeats) logistic regression reaches {sh['balanced_accuracy']:.2f} "
+                         f"on average (95th percentile {sh['p95']:.2f}); p = {sh['p_value_model']:.3g} for the transformer.")
         if len(folds) > 1:
             vals = [f["balanced_accuracy"] for f in folds if f.get("balanced_accuracy") is not None]
             lines.append(f"Across folds: {np.mean(vals):.2f} ± {np.std(vals):.2f} (mean ± sd).")
@@ -683,6 +706,13 @@ def _collect(prep: Prepared, outcomes: list[FoldOutcome]) -> tuple[dict, dict]:
                         "example_original": norm.inverse(orig), "example_reconstruction": norm.inverse(rec),
                         "example_hidden": np.nan_to_num(hid) > 0.5, "example_mask_name": train_name})
     metrics["run_summary"] = metrics["summary_lines"][0]
+    early = [o for o in outcomes if o.fit.stopped in ("stop_requested", "time_limit")]
+    if early:
+        why = "the time limit was reached" if all(o.fit.stopped == "time_limit" for o in early) else \
+            "it was asked to stop (Stop button or the cluster's time limit)"
+        where = "" if len(outcomes) == 1 else f" in {len(early)} of {len(outcomes)} folds"
+        metrics.setdefault("summary_lines", []).append(
+            f"Training was stopped early{where} because {why}; the results use the best model up to then.")
     return to_jsonable(metrics), mat
 
 
