@@ -72,6 +72,69 @@ def cmd_synth(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_defaults(args: argparse.Namespace) -> int:
+    from prismt.config import schema_for_matlab
+
+    payload = schema_for_matlab()
+    _emit(args, payload, dumps(payload))
+    return EXIT_OK
+
+
+def _load(args: argparse.Namespace) -> tuple[dict, dict]:
+    import json
+    from pathlib import Path
+
+    from prismt.config import load_config
+
+    source = json.loads(Path(args.config).read_text(encoding="utf-8"))
+    return load_config(args.config), source
+
+
+def cmd_check(args: argparse.Namespace) -> int:
+    from prismt.run import check
+
+    cfg, _ = _load(args)
+    report = check(cfg, timing=args.timing)
+    s = report["selection"]
+    lines = [f"{s['n_trials']} trials selected; {report['model']['tokens_per_trial']} tokens per trial; "
+             f"{report['model']['parameters']:,} parameters.",
+             f"Split: {report['split']['scheme']} on {report['split']['test_on']} ({report['split']['n_folds']} fold(s))."]
+    if s["class_names"]:
+        lines.append("Classes: " + ", ".join(f"{n} ({c})" for n, c in zip(s["class_names"], s["class_counts"])))
+    if report["estimate"]:
+        e = report["estimate"]
+        lines.append(f"About {e['seconds_per_epoch']} s per epoch on {e['device']}; at most {e['max_total_minutes']} min.")
+    for w in report["warnings"]:
+        lines.append(f"warning: {w['message']}")
+    _emit(args, report, "\n".join(lines))
+    return EXIT_OK
+
+
+def cmd_train(args: argparse.Namespace) -> int:
+    from prismt.run import run
+
+    cfg, source = _load(args)
+    out = run(cfg, run_dir=args.run_dir, only_fold=args.fold, source=source)
+    import json
+
+    metrics = json.loads((out / "metrics.json").read_text()) if (out / "metrics.json").exists() else {}
+    _emit(args, {"ok": True, "run_dir": str(out), "summary": metrics.get("summary_lines", [])},
+          "\n".join([f"Run folder: {out}", *metrics.get("summary_lines", [])]))
+    return EXIT_OK
+
+
+def cmd_summarize(args: argparse.Namespace) -> int:
+    from prismt.run import summarize
+
+    info = summarize(args.run)
+    lines = [info["run_dir"]]
+    if "status" in info:
+        lines.append(f"state: {info['status'].get('state')}")
+    lines += info.get("metrics", {}).get("summary_lines", [])
+    _emit(args, info, "\n".join(lines))
+    return EXIT_OK
+
+
 # ---------------------------------------------------------------------------------------
 # Parser
 # ---------------------------------------------------------------------------------------
@@ -102,10 +165,28 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--difficulty", default="medium", choices=["easy", "medium", "hard"])
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out", required=True, help="output file (.mat)")
+
+    add("defaults", cmd_defaults, "print the settings schema, presets and defaults (for MATLAB)")
+
+    p = add("check", cmd_check, "check a run's settings against its dataset without training")
+    p.add_argument("--config", required=True, help="run settings (JSON)")
+    p.add_argument("--timing", action="store_true", help="also time a few training steps to estimate run time")
+
+    p = add("train", cmd_train, "train and evaluate a model")
+    p.add_argument("--config", required=True, help="run settings (JSON)")
+    p.add_argument("--run-dir", default=None, help="run folder to write (default: a new folder in output.root)")
+    p.add_argument("--fold", type=int, default=None, help="only this cross-validation fold (1-based)")
+
+    p = add("summarize", cmd_summarize, "describe a run folder")
+    p.add_argument("run", help="run folder")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
+    import warnings
+
+    # numpy 2.x with Apple's Accelerate BLAS reports spurious floating-point warnings in matmul.
+    warnings.filterwarnings("ignore", message=".*encountered in matmul", category=RuntimeWarning)
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command is None:
