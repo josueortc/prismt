@@ -1,0 +1,23 @@
+[
+  {"code": "E_ENV_NO_TORCH", "pattern": "No module named '?torch'?", "title": "PyTorch is not installed in this Python",
+   "hint": "Open the Setup tab and click Create environment (or choose the PRISMT environment)."},
+  {"code": "E_ENV_NO_PRISMT", "pattern": "No module named '?prismt'?", "title": "Python cannot find PRISMT's code",
+   "hint": "Open the Setup tab and click Check again; if it persists, click Create environment."},
+  {"code": "E_ENV_NO_MODULE", "pattern": "No module named '?[A-Za-z_]+'?", "title": "A Python package is missing",
+   "hint": "Recreate the PRISMT environment (Setup tab, Create environment)."},
+  {"code": "E_OOM_GPU", "pattern": "(CUDA|MPS) (backend )?out of memory|out of memory", "title": "The GPU ran out of memory",
+   "hint": "Use a smaller preset, a smaller batch size, wider time bins, or more time bins per token."},
+  {"code": "E_CUDA_MISMATCH", "pattern": "no kernel image is available|CUDA driver version is insufficient|NVIDIA driver on your system is too old",
+   "title": "PyTorch does not match this computer's GPU or driver",
+   "hint": "Install the PyTorch build for your CUDA version (see docs/cluster.md), or run on the CPU."},
+  {"code": "E_MEMORY", "pattern": "MemoryError|Killed|exit code 137", "title": "The computer ran out of memory",
+   "hint": "Use fewer trials (Trials per session), wider time bins, or run on the cluster."},
+  {"code": "E_OMP", "pattern": "OMP: Error #15", "title": "Two copies of a math library were loaded",
+   "hint": "Recreate the PRISMT environment; do not mix conda and pip installs of numpy and torch."},
+  {"code": "E_LIBRARY", "pattern": "GLIBCXX_[0-9.]+' not found|Library not loaded|DLL load failed",
+   "title": "A system library conflict stopped Python",
+   "hint": "Recreate the PRISMT environment. If it persists, start MATLAB from a terminal."},
+  {"code": "E_FILE", "pattern": "FileNotFoundError[^\\n]*", "title": "A file was not found", "hint": "Check the dataset path."},
+  {"code": "E_PERMISSION", "pattern": "PermissionError[^\\n]*", "title": "PRISMT could not write to the run folder",
+   "hint": "Choose a project folder you can write to."}
+]

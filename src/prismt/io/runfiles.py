@@ -134,6 +134,8 @@ def write_csv(path: str | Path, rows: list[dict], columns: list[str] | None = No
 def _csv_value(v: Any) -> Any:
     if v is None:
         return ""
+    if isinstance(v, (bool, np.bool_)):
+        return int(v)  # 1/0: MATLAB's readtable reads numbers, not "True"/"False" text
     if isinstance(v, (float, np.floating)):
         return "" if not np.isfinite(v) else f"{float(v):.6g}"
     if isinstance(v, (np.integer, np.bool_)):
