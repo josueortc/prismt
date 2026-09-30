@@ -79,7 +79,8 @@ Settings that the presets change:
 |---|---|---|---|
 | `selection.filters` | (empty) | filters | **Trial filters.** Keep only trials that match every filter, for example stim is CS+, or response is hit or CR. |
 | `selection.channels` (advanced) | none | list | **Channels.** Names of the channels to use. Empty: all channels. |
-| `selection.modalities` | none | list | **Modalities.** Names of the modalities (signals) to use, for example calcium and ach. Empty: all. |
+| `selection.channel_groups` | none | list | **Channel groups.** Use only channels in these groups (the dataset's ChannelGroups, e.g. left and right, brain areas, sensors or body parts). Empty: all groups. Combined with Channels, a channel must satisfy both. |
+| `selection.modalities` | none | list | **Modalities.** Names of the signals to use, for example calcium and running speed, or EMG and pupil. Empty: all. |
 | `selection.max_trials_per_session` (advanced) | none | whole number, at least 1 | **Trials per session (at most).** Use at most this many randomly chosen trials from each session, to make a test run faster. Empty: all trials. |
 | `selection.min_valid_fraction` (advanced) | 0.5 | number, 0 to 1 | **Minimum data present per trial.** Skip a trial if less than this fraction of its values are present (not missing). |
 
@@ -109,8 +110,8 @@ How trials are divided into training, validation (choosing when to stop) and tes
 |---|---|---|---|
 | `split.test_on` | auto | `auto` / `subject` / `session` / `trial` | **Test on.** What the final score must generalize to. subject: animals never used for training (the strongest claim). session: new sessions of known animals. trial: held-out trials of known sessions, only valid when the label changes within sessions. auto: the strongest level your data allow. |
 | `split.validate_on` (advanced) | auto | `auto` / `subject` / `session` / `trial` | **Validate on.** Validation trials decide when to stop training and which epoch to keep. They are held out at this level from the training data. auto: the same level as testing when there are enough groups. |
-| `split.folds` | auto | number or `auto` | **Evaluation.** auto: one train/validation/test split when there are 10 or more groups, otherwise cross-validation so that every animal is tested once. A number k: k-fold cross-validation. loo: leave one group out (each animal is the test set once). |
-| `split.test_fraction` (advanced) | 0.2 | number, 0 to 0.5 | **Test fraction.** Fraction of groups used for testing when there is a single split. |
+| `split.folds` | auto | number or `auto` | **Evaluation.** auto: cross-validation, so that every subject (or session, or trial, depending on Test on) is tested exactly once: 5 folds with 6 or more groups, leave-one-out with 3 to 5. A number k: k-fold cross-validation; 1: a single train/validation/test split (faster, but the score depends on which few groups were tested). loo: leave one group out. |
+| `split.test_fraction` (advanced) | 0.2 | number, 0 to 0.5 | **Test fraction.** Fraction of groups used for testing when there is a single split (Evaluation = 1). |
 | `split.val_fraction` (advanced) | 0.15 | number, 0 to 0.5 | **Validation fraction.** Fraction of the training groups held out for validation. |
 | `split.seed` (advanced) | 0 | whole number, at least 0 | **Split seed.** Changes which animals end up in training, validation and test. Results should not depend on it much. |
 | `split.allow_leaky` (advanced) | off | on / off | **Allow leaky split.** Allow the same session or animal in training and testing even though the label is constant within it. Scores will be inflated; for exploration only. |

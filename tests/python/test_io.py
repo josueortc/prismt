@@ -135,7 +135,7 @@ def test_orientation_probes_catch_swapped_axes_even_when_sizes_match(tmp_path):
         ({"channel_names": ["a", "a", "b"]}, "E_DATA_CHANNELS"),
         ({"channel_names": ["a", "b"]}, "E_DATA_CHANNELS"),
         ({"modality_channels": [[1, 5]]}, "E_DATA_MODALITIES"),
-        ({"modality_kinds": ["brainwaves"]}, "E_DATA_MODALITIES"),
+        ({"modality_kinds": [""]}, "E_DATA_MODALITIES"),  # any text is a kind, but not empty text
         ({"times_s": [0.0, 0.0]}, "E_DATA_TIME"),
         ({"subject": "animal"}, "E_DATA_ROLES"),
     ],
@@ -234,3 +234,27 @@ def test_missing_file_error(tmp_path):
     with pytest.raises(DatasetError) as err:
         read_dataset(tmp_path / "nope.mat")
     assert err.value.code == "E_DATA_MISSING"
+
+
+def test_channel_groups_and_free_kinds_round_trip(tmp_path):
+    from prismt.config import load_config
+    from prismt.data.selection import select
+    from prismt.errors import PrismtError
+
+    rng = np.random.default_rng(0)
+    X = rng.normal(size=(20, 5, 4, 2)).astype(np.float32)
+    trials = {"subject": [f"S{i % 4}" for i in range(20)], "cond": ["a", "b"] * 10}
+    f = write_dataset(tmp_path / "g.mat", X, trials, channel_names=["emg1", "emg2", "pupil", "x", "y"],
+                      channel_groups=["arm", "arm", "eye", "paw", "paw"], modality_names=["raw", "smooth"],
+                      modality_kinds=["physiology", "behavior"], fs_hz=100, subject="subject")
+    ds = read_dataset(f)
+    assert ds.channel_groups == ("arm", "arm", "eye", "paw", "paw")
+    assert [m.kind for m in ds.modalities] == ["physiology", "behavior"]
+    cfg = load_config({"task": "classify", "dataset": {"path": str(f)}, "labels": {"column": "cond"},
+                       "selection": {"channel_groups": ["arm", "eye"]}})
+    sel = select(ds, cfg)
+    assert [ds.channel_names[c] for c in sel.channels] == ["emg1", "emg2", "pupil"]
+    cfg["selection"]["channel_groups"] = ["tail"]
+    with pytest.raises(PrismtError) as err:
+        select(ds, cfg)
+    assert "arm, eye, paw" in str(err.value.hint) or "arm, eye, paw" in str(err.value)

@@ -33,6 +33,15 @@ function [ds, report] = importData(source, opts)
 %     AverageHemispheres  average channels 2k-1 and 2k (82 grid tiles -> 41 regions)
 %     Behavior      per-trial time-series columns to add as a "behavior" modality
 %     Atlas         "grid82", "grid41", "allen52" or "" (channel positions for maps)
+%     Event         what time 0 is, e.g. "stimulus onset" (default: from the file, if it says)
+%     Kind          what the signal is, e.g. "neural", "physiology" (default "signal");
+%                   Behavior columns are always of kind "behavior"
+%     ModalityNames names of the signals (default: the names of the variables in the file)
+%
+%   Sessions with different numbers of channels are accepted: channels are matched by name
+%   when the table has a per-session list of names (a column of string arrays), otherwise by
+%   position. To join recordings of different kinds, import each and use
+%   prismt.combineDatasets.
 %     SamplingRate, TimeZero   (default: from meta, else 10 Hz starting at 0)
 %     Subject, Session         column names (default: mouse, and one session per table row)
 %     Window, Stride           samples per window and step, for continuous recordings
@@ -48,6 +57,8 @@ arguments
     opts.AverageHemispheres (1, 1) logical = false
     opts.Behavior (1, :) string = strings(1, 0)
     opts.Atlas (1, 1) string = ""
+    opts.Event (1, 1) string = ""
+    opts.Kind (1, 1) string = "signal"
     opts.SamplingRate double = []
     opts.TimeZero double = []
     opts.Subject (1, 1) string = "mouse"

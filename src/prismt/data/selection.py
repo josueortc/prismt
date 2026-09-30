@@ -107,6 +107,16 @@ def select(ds: PrismtDataset, cfg: dict) -> Selection:
         dropped[f"filter on {col.name}"] = before - int(keep.sum())
 
     channels = _pick(ds.channel_names, cfg["selection"]["channels"], "channel", "selection.channels", issues)
+    wanted_groups = cfg["selection"].get("channel_groups")
+    if wanted_groups:
+        groups = ds.channel_groups or ("",) * len(ds.channel_names)
+        present = sorted({g for g in groups if g})
+        unknown = [g for g in wanted_groups if g not in present]
+        if unknown:
+            issues.append(Issue("error", "E_SEL_NAME", f"There is no channel group called {', '.join(map(repr, unknown))}.",
+                                f"Groups in this dataset: {', '.join(present) or 'none (set ChannelGroups when making it)'}.",
+                                "selection.channel_groups"))
+        channels = np.asarray([c for c in channels if groups[int(c)] in wanted_groups], dtype=np.int64)
     modalities = _pick(ds.modality_names, cfg["selection"]["modalities"], "modality", "selection.modalities", issues)
     pairs = []
     chan_pos = {int(c): i for i, c in enumerate(channels)}

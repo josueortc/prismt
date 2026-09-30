@@ -38,7 +38,8 @@ def logistic(F_train, y_train, F_val, y_val, F_test, n_classes: int, seed: int =
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             clf.fit(F_train, y_train)
-        score = balanced_accuracy_score(y_val, clf.predict(F_val)) if len(y_val) else 0.0
+            # a validation set with one class is possible with few subjects; the score is still usable
+            score = balanced_accuracy_score(y_val, clf.predict(F_val)) if len(y_val) else 0.0
         if score > best_score:
             best, best_score, best_c = clf, score, c
     prob = np.zeros((len(F_test), n_classes))

@@ -592,7 +592,7 @@ def _collect(prep: Prepared, outcomes: list[FoldOutcome]) -> tuple[dict, dict]:
                       "class_counts": None if sel.y is None else np.bincount(sel.y, minlength=prep.n_classes).tolist()},
         "training": training,
     }
-    what = {"subject": "new animals", "session": "new sessions", "trial": "held-out trials"}[plan.test_on]
+    what = {"subject": "new subjects", "session": "new sessions", "trial": "held-out trials"}[plan.test_on]
     how = "a single split" if plan.scheme == "single" else f"{len(plan.folds)}-fold cross-validation"
     if cfg["task"] == "classify":
         from prismt.eval.metrics import classification_metrics, per_group

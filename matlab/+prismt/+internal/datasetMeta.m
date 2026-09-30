@@ -14,7 +14,7 @@ meta.created_by = sprintf('prismt-matlab %s (MATLAB %s)', v.Package, version('-r
 meta.shape = arr([N R T M]);
 
 meta.channels = struct('names', {arr(ds.ChannelNames)}, 'x', {orNull(ds.ChannelX)}, ...
-    'y', {orNull(ds.ChannelY)}, 'hemisphere', {orNull(ds.Hemisphere)}, 'atlas', {textOrNull(ds.Atlas)});
+    'y', {orNull(ds.ChannelY)}, 'hemisphere', {orNull(ds.Hemisphere)}, 'groups', {orNull(ds.ChannelGroups)}, 'atlas', {textOrNull(ds.Atlas)});
 
 chan = cell(1, M);
 for m = 1:M

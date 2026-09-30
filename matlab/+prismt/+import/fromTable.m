@@ -25,9 +25,25 @@ if isempty(fieldnames(p.signals))
 end
 sigNames = string(fieldnames(p.signals));
 T0 = size(p.signals.(sigNames(1)){1}, 3);
+% Channel names per session (e.g. a column "channelNames" holding each session's electrode
+% or region names): sessions may then have different channels, matched by name.
+nChan = cellfun(@(x) size(x, 2), p.signals.(sigNames(1)));
+nameCol = "";
+for v = vars
+    col = T.(v);
+    if iscell(col) && all(cellfun(@(x) (iscellstr(x) || isstring(x) || iscategorical(x)) && numel(x) > 1, col))
+        n = cellfun(@numel, col);
+        if all(n(:) == nChan(:))
+            p.channelNames = cellfun(@(x) string(x(:)), col, 'UniformOutput', false);
+            nameCol = v;
+            p.notes(end + 1) = "Channel names were taken from column " + v + "; channels are matched by name across sessions.";
+            break
+        end
+    end
+end
 for v = vars
     key = matlab.lang.makeValidName(v);
-    if isfield(p.signals, key), continue; end
+    if isfield(p.signals, key) || v == nameCol, continue; end
     col = T.(v);
     if iscell(col) && all(cellfun(@(x) isnumeric(x) || islogical(x), col))
         sz = cellfun(@(x) size(x), col, 'UniformOutput', false);
@@ -83,7 +99,13 @@ function p = readMeta(p, S)
 if ~isfield(S, 'meta') || ~isstruct(S.meta), return; end
 m = S.meta;
 if isfield(m, 'frameRateHz'), p.fs = double(m.frameRateHz); end
-if isfield(m, 'windowSeconds'), p.t0 = double(m.windowSeconds(1)); end
+if isfield(m, 'windowSeconds')
+    p.t0 = double(m.windowSeconds(1));
+    p.event = "stimulus onset";      % tableForModeling windows are relative to the stimulus
+end
+for f = ["alignEvent", "event", "alignedTo"]
+    if isfield(m, f) && (ischar(m.(f)) || isstring(m.(f))), p.event = string(m.(f)); end
+end
 if isfield(m, 'parcellation') && startsWith(string(m.parcellation), "Grids82")
     p.atlasHint = "grid82";
 end

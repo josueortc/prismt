@@ -38,6 +38,7 @@ ds.ChannelNames = string(ch.names);
 ds.ChannelX = numOr(field(ch, 'x'));
 ds.ChannelY = numOr(field(ch, 'y'));
 ds.Hemisphere = strOr(field(ch, 'hemisphere'));
+ds.ChannelGroups = strOr(field(ch, 'groups'));
 ds.Atlas = textOr(field(ch, 'atlas'), "");
 if isfield(S, 'atlas_image')
     ds.AtlasImage = uint16(S.atlas_image);

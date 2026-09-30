@@ -1,7 +1,7 @@
-"""Train / validation / test splits that respect animals and sessions.
+"""Train / validation / test splits that respect subjects and sessions.
 
-Trials from one animal (or one session) are not independent: they share anatomy,
-indicator expression and behavioural state. If the label is constant within a group (for
+Trials from one subject (an animal, a participant) or one session are not independent:
+they share anatomy, recording conditions and behavioural state. If the label is constant within a group (for
 example ``phase`` within a session, or genotype within an animal), putting trials of the
 same group in training and testing lets a model recognize the group instead of learning
 the label, and the score is inflated. So:
@@ -9,7 +9,7 @@ the label, and the score is inflated. So:
 * ``test_on`` must be at least as coarse as the label's level (the coarsest grouping in
   which the label never changes); otherwise the split is refused (or flagged, with
   ``allow_leaky``);
-* with few groups, cross-validation is used so every animal is tested once;
+* by default cross-validation is used, so every subject (or session) is tested once;
 * groups are assigned by a stable hash within label strata, so the assignment does not
   depend on row order and every class appears in every part where possible;
 * :func:`assert_no_leakage` turns all of this from a convention into a check.
@@ -141,7 +141,7 @@ def plan_splits(
                              title=_TITLE)
     if subject is None and y is not None:
         warnings.append(Issue("warning", "W_NO_SUBJECT", "No subject column: the score only shows that the model "
-                              "works on held-out trials, not on new animals."))
+                              "works on held-out trials, not on new subjects."))
 
     g = groups[test_on]
     uniq = sorted(set(g.tolist()))
@@ -161,9 +161,9 @@ def plan_splits(
 
     folds_cfg = cfg["folds"]
     if folds_cfg == "auto":
-        if test_on == "trial" or n_groups >= 10:
-            scheme, k = "single", 1
-        elif n_groups >= 6:
+        # Cross-validation by default: every subject (session, trial) is tested exactly once,
+        # so the score does not hinge on which few groups happened to land in one test set.
+        if n_groups >= 6:
             scheme, k = "kfold", 5
         elif n_groups >= 3:
             scheme, k = "loo", n_groups

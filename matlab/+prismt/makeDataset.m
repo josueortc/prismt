@@ -4,10 +4,18 @@ function ds = makeDataset(X, trials, opts)
 %   ds = prismt.makeDataset(X, trials, Name=Value, ...)
 %
 %   X       numeric array. By default its dimensions are trials x channels x time
-%           (x modalities); use AxisOrder if yours are arranged differently.
-%   trials  table (or struct of column vectors) with one row per trial: mouse, session,
-%           phase, stim, response, ... Any names and any number of columns. Use [] if you
+%           (x modalities); use AxisOrder if yours are arranged differently. A channel is
+%           anything recorded over time: a brain region or electrode, a behavior variable
+%           (speed, pupil, a body-part coordinate), a physiological or stimulus signal.
+%           A modality is a kind of signal; each can have its own channels
+%           (ModalityChannels), e.g. 82 calcium channels and 3 behavior channels.
+%   trials  table (or struct of column vectors) with one row per trial: subject, session,
+%           condition, response, ... Any names and any number of columns. Use [] if you
 %           have no per-trial information.
+%
+%   Recordings with different channels (e.g. electrodes that differ between sessions):
+%   make one dataset per recording and join them with prismt.combineDatasets, which
+%   matches channels by name and marks the ones a recording lacks as missing.
 %
 %   Name=Value options
 %     AxisOrder         order of the dimensions of X, e.g. "trials,time,channels".
@@ -21,14 +29,19 @@ function ds = makeDataset(X, trials, opts)
 %     ChannelNames      one name per channel. Default "ch01", "ch02", ...
 %     ChannelX, ChannelY  channel positions for maps (optional).
 %     Hemisphere        "L"/"R" per channel (optional).
+%     ChannelGroups     a group per channel (optional), e.g. brain areas, "left"/"right",
+%                       or "arm"/"eye" for sensors. Runs can use some groups only
+%                       (selection.channel_groups); "" = no group.
 %     Atlas             atlas name, e.g. "grid82" (optional).
 %     AtlasImage        label image, pixel value k = channel k (optional).
 %     ModalityNames     e.g. ["calcium","ach"]. Default "signal1", ...
 %     ModalityUnits     e.g. ["dF/F","dF/F"]. Default "".
-%     ModalityKinds     "neural", "behavior" or "other" per modality. Default "neural".
+%     ModalityKinds     what each modality is, e.g. "neural", "behavior", "physiology",
+%                       "stimulus", "other" (any short text). Default "signal".
 %     ModalityChannels  cell array: which channels exist for each modality (1-based).
 %                       Default: all channels for every modality.
-%     Subject           name of the trials column that identifies each animal.
+%     Subject           name of the trials column that identifies each subject (animal,
+%                       participant...). Set it: results are then tested on new subjects.
 %     Session           name of the trials column that identifies each session.
 %     ValueLabels       struct, e.g. struct('stim', {{0,"CS-"; 1,"CS+"}}).
 %     TrialUid          one unique id per trial (optional).
@@ -52,6 +65,7 @@ arguments
     opts.ChannelX double = []
     opts.ChannelY double = []
     opts.Hemisphere string = strings(0, 1)
+    opts.ChannelGroups string = strings(0, 1)
     opts.Atlas (1, 1) string = ""
     opts.AtlasImage = []
     opts.ModalityNames string = strings(0, 1)
@@ -82,11 +96,12 @@ ds.ChannelNames = defaultNames(opts.ChannelNames, R, "ch%02d");
 ds.ChannelX = opts.ChannelX(:);
 ds.ChannelY = opts.ChannelY(:);
 ds.Hemisphere = opts.Hemisphere(:);
+ds.ChannelGroups = opts.ChannelGroups(:);
 ds.Atlas = opts.Atlas;
 if ~isempty(opts.AtlasImage), ds.AtlasImage = uint16(opts.AtlasImage); end
 ds.ModalityNames = defaultNames(opts.ModalityNames, M, "signal%d");
 ds.ModalityUnits = fillTo(opts.ModalityUnits, M, "");
-ds.ModalityKinds = fillTo(opts.ModalityKinds, M, "neural");
+ds.ModalityKinds = fillTo(opts.ModalityKinds, M, "signal");
 if isempty(opts.ModalityChannels)
     ds.ModalityChannels = repmat({(1:R)'}, M, 1);
 else

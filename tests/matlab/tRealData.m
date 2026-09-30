@@ -11,7 +11,7 @@ classdef (TestTags = {'Python', 'RealData'}) tRealData < matlab.unittest.TestCas
             dir = string(tc.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture).Folder);
             [ds, rep] = prismt.importData(file, Atlas="grid82", Behavior=["runSpeed", "faceMotion"]);
             tc.verifyNotEmpty(rep.notes);
-            tc.verifyEqual(ds.ModalityNames, ["calcium"; "behavior"]);
+            tc.verifyEqual(ds.ModalityNames, ["dff"; "behavior"]);
             tc.verifyEqual(ds.T, 41, "tableForModeling trials are 41 frames");
             tc.verifyEqual(ds.ValueLabels.Label(ds.ValueLabels.Column == "stim")', ["CS-", "CS+"]);
             issues = ds.validate();

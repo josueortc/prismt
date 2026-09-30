@@ -130,7 +130,9 @@ def test_invalid_and_masked_values_change_nothing():
 
 
 def test_nan_inputs_and_empty_rows_stay_finite_on_every_device():
-    devices = ["cpu"] + (["mps"] if torch.backends.mps.is_available() else [])
+    from prismt.env import _mps_works
+
+    devices = ["cpu"] + (["mps"] if _mps_works() else [])
     for dev in devices:
         mdl = model("mae").to(dev)
         x, v = batch(2)

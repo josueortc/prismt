@@ -15,7 +15,7 @@ classdef Dataset
     %     ChannelNames      one name per channel
     %     ChannelX/ChannelY optional channel positions, used to draw maps
     %     Atlas, AtlasImage optional atlas name and label image (pixel value k = channel k)
-    %     ModalityNames     e.g. ["calcium"; "ach"]; also ModalityUnits, ModalityKinds
+    %     ModalityNames     e.g. ["calcium"; "ach"] or ["emg"; "pupil"]; also ModalityUnits, ModalityKinds
     %     ModalityChannels  which channels exist for each modality (1-based, cell array)
     %     Times             time of each sample in seconds; Event says what time 0 is
     %     Trials            table with one row per trial (mouse, session, phase, stim, ...)
@@ -33,6 +33,7 @@ classdef Dataset
         ChannelX (:, 1) double = zeros(0, 1)
         ChannelY (:, 1) double = zeros(0, 1)
         Hemisphere (:, 1) string = strings(0, 1)
+        ChannelGroups (:, 1) string = strings(0, 1)   % e.g. "left"/"right", brain area, sensor, body part ("" = none)
         Atlas (1, 1) string = ""
         AtlasImage uint16 = uint16([])
         ModalityNames (:, 1) string = strings(0, 1)
@@ -95,7 +96,7 @@ classdef Dataset
                 issues = prismt.internal.addIssue(issues, "error", "E_DATA_CHANNELS", "Channel names must be unique; repeated: " + ...
                     strjoin(repeated(ds.ChannelNames), ", ") + ".", "", "ChannelNames");
             end
-            for f = ["ChannelX", "ChannelY", "Hemisphere"]
+            for f = ["ChannelX", "ChannelY", "Hemisphere", "ChannelGroups"]
                 if ~isempty(ds.(f)) && numel(ds.(f)) ~= R
                     issues = prismt.internal.addIssue(issues, "error", "E_DATA_CHANNELS", sprintf("%s must have one value per channel (%d).", f, R), "", f);
                 end
@@ -104,7 +105,7 @@ classdef Dataset
             if numel(ds.ModalityNames) ~= M
                 issues = prismt.internal.addIssue(issues, "error", "E_DATA_MODALITIES", ...
                     sprintf("There are %d modality names but X has %d modalities.", numel(ds.ModalityNames), M), ...
-                    "Give one name per modality (the fourth dimension of X), e.g. ""calcium"".", "ModalityNames");
+                    "Give one name per modality (the fourth dimension of X), e.g. ""calcium"" or ""pupil"".", "ModalityNames");
             elseif numel(unique(ds.ModalityNames)) < M || any(strlength(ds.ModalityNames) == 0)
                 issues = prismt.internal.addIssue(issues, "error", "E_DATA_MODALITIES", "Modality names must be unique and non-empty.", "", "ModalityNames");
             end
@@ -113,10 +114,9 @@ classdef Dataset
                     issues = prismt.internal.addIssue(issues, "error", "E_DATA_MODALITIES", sprintf("%s must have one entry per modality (%d).", f, M), "", f);
                 end
             end
-            bad = setdiff(ds.ModalityKinds, ["neural"; "behavior"; "other"]);
-            if ~isempty(bad)
-                issues = prismt.internal.addIssue(issues, "error", "E_DATA_MODALITIES", "Unknown modality kind """ + bad(1) + ...
-                    """; use neural, behavior or other.", "", "ModalityKinds");
+            if any(strlength(strtrim(ds.ModalityKinds)) == 0 | ismissing(ds.ModalityKinds))
+                issues = prismt.internal.addIssue(issues, "error", "E_DATA_MODALITIES", "Every modality needs a kind: " + ...
+                    "short text such as neural, behavior, physiology, stimulus or other.", "", "ModalityKinds");
             end
             if numel(ds.ModalityChannels) ~= M
                 issues = prismt.internal.addIssue(issues, "error", "E_DATA_MODALITIES", sprintf("ModalityChannels must list the channels of each of the %d modalities.", M), ...
@@ -164,8 +164,8 @@ classdef Dataset
             end
             if strlength(ds.Subject) == 0
                 issues = prismt.internal.addIssue(issues, "warning", "W_DATA_NO_SUBJECT", ...
-                    "No column is marked as the subject (animal), so PRISMT cannot keep animals separate between training and testing.", ...
-                    "Set Subject to the Trials column that identifies each animal.", "Subject");
+                    "No column is marked as the subject (animal, participant...), so PRISMT cannot keep subjects separate between training and testing.", ...
+                    "Set Subject to the Trials column that identifies each subject.", "Subject");
             end
             if ~isempty(ds.TrialUid) && (numel(ds.TrialUid) ~= N || numel(unique(ds.TrialUid)) < N)
                 issues = prismt.internal.addIssue(issues, "error", "E_DATA_COLUMNS", "TrialUid must have one unique value per trial.", "", "TrialUid");

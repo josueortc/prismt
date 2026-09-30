@@ -41,7 +41,22 @@ if ~isempty(opts.Name)
     suite = suite(keep);
 end
 runner = TestRunner.withTextOutput();
+recorder = matlab.unittest.plugins.DiagnosticsRecordingPlugin;
+runner.addPlugin(recorder);
 results = runner.run(suite);
+if strcmp(getenv('GITHUB_ACTIONS'), 'true')
+    % Failures as GitHub annotations, readable without opening the log.
+    for k = find([results.Failed])
+        text = results(k).Name;
+        try
+            rec = results(k).Details.DiagnosticRecord;
+            if ~isempty(rec), text = text + ": " + string(rec(1).Report); end
+        catch
+        end
+        text = replace(extractBefore(text + " ", min(strlength(text) + 1, 1500)), newline, "%0A");
+        fprintf('::error::%s\n', text);
+    end
+end
 fprintf('\n%d passed, %d failed, %d incomplete (skipped), %.1f s\n', nnz([results.Passed]), ...
     nnz([results.Failed]), nnz([results.Incomplete]), sum([results.Duration]));
 end

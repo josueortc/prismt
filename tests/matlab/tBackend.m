@@ -115,7 +115,7 @@ classdef (TestTags = {'Python'}) tBackend < matlab.unittest.TestCase
             [out, rep] = prismt.importData(f, Behavior="runSpeed");
             tc.verifyEqual(out.N, ds.N);
             tc.verifyEqual(out.X(:, 1:ds.R, :, 1), ds.X(:, :, :, 1), 'AbsTol', 1e-5);
-            tc.verifyEqual(out.ModalityNames, ["calcium"; "behavior"]);
+            tc.verifyEqual(out.ModalityNames, ["dff"; "behavior"]);
             tc.verifyEqual(out.ChannelNames(end), "runSpeed");
             tc.verifyEqual(out.ValueLabels.Label(out.ValueLabels.Column == "stim"), ["CS-"; "CS+"]);
             tc.verifyEqual(out.Times, ds.Times, 'AbsTol', 1e-9);

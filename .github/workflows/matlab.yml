@@ -31,4 +31,7 @@ jobs:
       - name: Tests
         uses: matlab-actions/run-command@v2
         with:
-          command: addpath('tests/matlab'); r = runPrismtTests(); assert(~any([r.Failed]), 'MATLAB tests failed')
+          command: >-
+            addpath('tests/matlab');
+            try, r = runPrismtTests(); catch e, fprintf('::error::%s\n', replace(getReport(e, 'basic'), newline, '%0A')); rethrow(e); end;
+            assert(~any([r.Failed]), 'MATLAB tests failed')

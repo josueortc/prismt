@@ -23,26 +23,68 @@ end
 nS = numel(p.signals.(chosen(1)));
 counts = cellfun(@(x) size(x, 1), p.signals.(chosen(1)));
 N = sum(counts);
-[R0, T] = deal(size(p.signals.(chosen(1)){1}, 2), size(p.signals.(chosen(1)){1}, 3));
+T = size(p.signals.(chosen(1)){1}, 3);
+nChan = zeros(nS, 1);
 for s = 1:nS
+    sz = size(p.signals.(chosen(1)){s});
+    nChan(s) = sz(2);
     for c = chosen
-        sz = size(p.signals.(c){s});
-        if sz(2) ~= R0 || sz(3) ~= T
-            error('prismt:E_IMPORT_ROWS', 'Session %d (%s): %s is %s, but the first session is %d channels x %d time points.', ...
-                s, p.sessionNames(s), c, mat2str(sz), R0, T);
+        szc = size(p.signals.(c){s});
+        if szc(1) ~= sz(1) || szc(2) ~= sz(2)
+            error('prismt:E_IMPORT_ROWS', 'Session %d (%s): %s is %s but %s is %s; signals of one session must match.', ...
+                s, p.sessionNames(s), c, mat2str(szc), chosen(1), mat2str(sz));
+        end
+        if szc(3) ~= T
+            error('prismt:E_IMPORT_ROWS', ['Session %d (%s) has %d time points but the first session has %d. ' ...
+                'Cut every session to the same window, or import them separately and join them with ' ...
+                'prismt.combineDatasets(..., Resample=true).'], s, p.sessionNames(s), szc(3), T);
         end
     end
 end
 
+% Channels: the same in every session, or (when their number differs) matched by name if
+% the file names them, else by position.
+if ~isempty(p.channelNames)
+    perSession = p.channelNames(:);
+elseif all(nChan == nChan(1))
+    perSession = {};
+else
+    perSession = arrayfun(@(r) compose("ch%02d", (1:r)'), nChan, 'UniformOutput', false);
+    notes(end + 1) = "Sessions have different numbers of channels (" + min(nChan) + " to " + max(nChan) + ...
+        "). They were matched by position (channel k of every session is the same channel); channels a " + ...
+        "session lacks are missing. If channels differ in identity, give their names (a channelNames column) " + ...
+        "or combine datasets with prismt.combineDatasets.";
+end
+if isempty(perSession)
+    R0 = nChan(1);
+    where = repmat({(1:R0)'}, nS, 1);
+    unionNames = strings(0, 1);
+else
+    unionNames = strings(0, 1);
+    for s = 1:nS, unionNames = [unionNames; setdiff(perSession{s}, unionNames, 'stable')]; end %#ok<AGROW>
+    R0 = numel(unionNames);
+    where = cell(nS, 1);
+    for s = 1:nS, [~, where{s}] = ismember(perSession{s}, unionNames); end
+    if R0 > max(nChan)
+        notes(end + 1) = R0 + " channels in total; each session has " + min(nChan) + " to " + max(nChan) + ...
+            ", the others are missing for its trials.";
+    end
+end
+varying = ~isempty(perSession) && (any(nChan ~= R0));
+
 % Neural part: one modality per chosen signal, or split channels into modalities.
-X = zeros(N, R0, T, numel(chosen), 'single');
+X = nan(N, R0, T, numel(chosen), 'single');
 row = 0;
 for s = 1:nS
     rows = row + (1:counts(s));
     for m = 1:numel(chosen)
-        X(rows, :, :, m) = single(p.signals.(chosen(m)){s});
+        X(rows, where{s}, :, m) = single(p.signals.(chosen(m)){s});
     end
     row = row + counts(s);
+end
+if varying && (opts.Layout ~= "independent" || opts.AverageHemispheres || strlength(opts.Atlas))
+    error('prismt:E_IMPORT_LAYOUT', ['Channel layouts, hemisphere averaging and atlases need the same channels ' ...
+        'in every session.']);
 end
 modNames = opts.ModalityNames;
 if opts.Layout ~= "independent"
@@ -68,11 +110,11 @@ if isempty(modNames)
     elseif size(X, 4) > 1
         modNames = compose("signal%d", 1:size(X, 4));
     else
-        modNames = "calcium";
-        if chosen ~= "dff", modNames = chosen; end
+        modNames = chosen;
     end
 end
 channelNames = compose("ch%02d", (1:size(X, 2))');
+if ~isempty(unionNames), channelNames = unionNames; end
 hemi = strings(0, 1);
 atlas = opts.Atlas;
 if strlength(atlas) == 0 && p.atlasHint == "grid82" && size(X, 2) == 82 && ~opts.AverageHemispheres
@@ -104,7 +146,7 @@ Rn = size(X, 2);
 M = size(X, 4);
 units = opts.ModalityUnits;
 if isempty(units), units = repmat("", 1, M); end
-kinds = repmat("neural", 1, M);
+kinds = repmat(string(opts.Kind), 1, M);
 chanSets = repmat({(1:Rn)'}, M, 1);
 
 % Behavior: its own channels (named after the columns) in an extra modality.
@@ -155,7 +197,7 @@ end
 trials = struct2table(cols);
 subject = opts.Subject;
 if ~ismember(subject, string(trials.Properties.VariableNames))
-    notes(end + 1) = "No '" + subject + "' column: animals cannot be kept apart (set Subject).";
+    notes(end + 1) = "No '" + subject + "' column: subjects cannot be kept apart between training and testing (set Subject).";
     subject = "";
 end
 fs = opts.SamplingRate; t0 = opts.TimeZero;
@@ -171,7 +213,11 @@ for c = string(fieldnames(p.labels))'
 end
 prov = struct('source_files', {{char(file)}}, 'importer', 'prismt.importData', ...
     'notes', {cellstr(notes(:)')}, 'signals', {cellstr(chosen)});
-ds = prismt.makeDataset(X, trials, SamplingRate=fs, TimeZero=t0, Event="stimulus onset", ...
+event = opts.Event;
+if strlength(event) == 0 && isfield(p, 'event'), event = p.event; end
+groups = strings(0, 1);
+if ~isempty(hemi), groups = replace(replace(hemi, "L", "left"), "R", "right"); end
+ds = prismt.makeDataset(X, trials, SamplingRate=fs, TimeZero=t0, Event=event, ChannelGroups=groups, ...
     ChannelNames=channelNames, ChannelX=x, ChannelY=y, Hemisphere=hemi, Atlas=atlas, ...
     ModalityNames=modNames, ModalityUnits=units, ModalityKinds=kinds, ModalityChannels=chanSets, ...
     Subject=subject, Session=sessionCol, ValueLabels=labels, Provenance=prov);

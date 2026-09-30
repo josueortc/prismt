@@ -7,6 +7,8 @@ installation is reported as a failed check instead of killing the report.
 
 from __future__ import annotations
 
+import functools
+
 import importlib
 import json
 import os
@@ -89,7 +91,10 @@ def select_device(requested: str = "auto") -> Any:
     return torch.device("cpu")
 
 
+@functools.lru_cache(maxsize=1)
 def _mps_works() -> bool:
+    """True when the Apple GPU can run what training needs (a layer, attention, a backward
+    pass). Some virtual Macs report MPS as available but cannot allocate on it."""
     import torch
 
     mps = getattr(torch.backends, "mps", None)
@@ -98,7 +103,15 @@ def _mps_works() -> bool:
     try:
         a = torch.arange(12.0).reshape(3, 4)
         b = (a.to("mps") @ a.to("mps").T).cpu()
-        return bool(torch.allclose(a @ a.T, b))
+        if not torch.allclose(a @ a.T, b):
+            return False
+        torch.manual_seed(0)
+        lin = torch.nn.Linear(16, 16).to("mps")
+        x = torch.randn(2, 4, 8, 16, device="mps", requires_grad=True)
+        q = lin(x)
+        out = torch.nn.functional.scaled_dot_product_attention(q, q, q)
+        out.sum().backward()
+        return bool(torch.isfinite(x.grad).all().item())
     except Exception:  # noqa: BLE001 - any failure means "do not use MPS"
         return False
 

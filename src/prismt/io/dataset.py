@@ -32,7 +32,8 @@ from prismt.jsonutil import as_list
 FORMAT_TAG = "prismt.dataset"
 FORMAT_VERSION = FORMATS["dataset"]
 COLUMN_TYPES = ("numeric", "categorical", "bool")
-MODALITY_KINDS = ("neural", "behavior", "other")
+# Describes what a signal is; any short text is accepted (these are the usual ones).
+MODALITY_KINDS = ("neural", "behavior", "physiology", "stimulus", "signal", "other")
 _READ_TITLE = "The dataset file could not be used"
 
 
@@ -116,6 +117,7 @@ class PrismtDataset:
     warnings: tuple[Issue, ...] = ()
     path: Path | None = None
     fingerprint: str = ""
+    channel_groups: tuple[str, ...] | None = None  # e.g. region, hemisphere, sensor, body part
 
     @property
     def n_trials(self) -> int:
@@ -394,12 +396,16 @@ def validate_contents(X: np.ndarray, meta: dict) -> list[Issue]:
     if hemi is not None and len(as_list(hemi)) != R:
         error("E_DATA_CHANNELS", f"channels.hemisphere must have one value per channel ({R}).",
               field="channels.hemisphere")
+    groups = channels.get("groups")
+    if groups is not None and len(as_list(groups)) != R:
+        error("E_DATA_CHANNELS", f"channels.groups must have one entry per channel ({R}); use \"\" for none.",
+              field="channels.groups")
 
     mods = meta.get("modalities") or {}
     mnames = as_list(mods.get("names"))
     if len(mnames) != M:
         error("E_DATA_MODALITIES", f"modalities.names has {len(mnames)} names but X has {M} modalities.",
-              "Give one name per modality (the fourth dimension of X), e.g. 'calcium'.",
+              "Give one name per modality (the fourth dimension of X).",
               "modalities.names")
     elif _duplicates(mnames):
         error("E_DATA_MODALITIES", "Modality names must be unique.", field="modalities.names")
@@ -409,9 +415,9 @@ def validate_contents(X: np.ndarray, meta: dict) -> list[Issue]:
             error("E_DATA_MODALITIES", f"modalities.{key} must have one entry per modality ({M}).",
                   field=f"modalities.{key}")
     for kind in as_list(mods.get("kinds")):
-        if kind not in MODALITY_KINDS:
-            error("E_DATA_MODALITIES", f"Unknown modality kind '{kind}'; use one of {', '.join(MODALITY_KINDS)}.",
-                  field="modalities.kinds")
+        if not isinstance(kind, str) or not kind.strip():
+            error("E_DATA_MODALITIES", "Every modality kind must be short text, e.g. "
+                  f"{', '.join(MODALITY_KINDS)}.", field="modalities.kinds")
     chan_sets = mods.get("channels")
     if chan_sets is not None:
         chan_sets = as_list(chan_sets)
@@ -580,7 +586,7 @@ def _build(X: np.ndarray, meta: dict, path: Path | None, warnings: tuple[Issue, 
     mods = meta.get("modalities") or {}
     mnames = [str(n) for n in as_list(mods.get("names"))]
     units = [str(u) for u in as_list(mods.get("units"))] or [""] * M
-    kinds = [str(k) for k in as_list(mods.get("kinds"))] or ["neural"] * M
+    kinds = [str(k) for k in as_list(mods.get("kinds"))] or ["signal"] * M
     chan_sets = as_list(mods.get("channels")) if mods.get("channels") is not None else [list(range(1, R + 1))] * M
     modalities = tuple(
         Modality(mnames[m], units[m], kinds[m], np.asarray(as_list(chan_sets[m]), dtype=np.int64) - 1)
@@ -622,6 +628,8 @@ def _build(X: np.ndarray, meta: dict, path: Path | None, warnings: tuple[Issue, 
         meta=meta,
         warnings=warnings,
         path=path,
+        channel_groups=None if channels.get("groups") is None else
+        tuple("" if g is None else str(g) for g in as_list(channels.get("groups"))),
     )
 
 
@@ -689,6 +697,7 @@ def summarize_dataset(ds: PrismtDataset, *, max_values: int = 50) -> dict:
         "fingerprint": ds.fingerprint,
         "n_trials": ds.n_trials,
         "n_channels": ds.n_channels,
+        "channel_groups": sorted({g for g in (ds.channel_groups or ()) if g}),
         "n_time": ds.n_time,
         "n_modalities": ds.n_modalities,
         "channel_names": list(ds.channel_names),
@@ -739,6 +748,7 @@ def write_dataset(
     channel_x: Sequence[float] | None = None,
     channel_y: Sequence[float] | None = None,
     hemisphere: Sequence[str] | None = None,
+    channel_groups: Sequence[str] | None = None,
     atlas: str | None = None,
     modality_names: Sequence[str] | None = None,
     modality_units: Sequence[str] | None = None,
@@ -774,6 +784,7 @@ def write_dataset(
         channel_x=channel_x,
         channel_y=channel_y,
         hemisphere=hemisphere,
+        channel_groups=channel_groups,
         atlas=atlas,
         modality_names=modality_names,
         modality_units=modality_units,
@@ -839,12 +850,13 @@ def build_meta(X: np.ndarray, trials: Mapping[str, Sequence[Any]], **kw: Any) ->
             "x": listify(kw.get("channel_x"), float),
             "y": listify(kw.get("channel_y"), float),
             "hemisphere": listify(kw.get("hemisphere")),
+            "groups": listify(kw.get("channel_groups")),
             "atlas": kw.get("atlas"),
         },
         "modalities": {
             "names": listify(kw.get("modality_names")) or [f"signal{m + 1}" for m in range(M)],
             "units": listify(kw.get("modality_units")) or [""] * M,
-            "kinds": listify(kw.get("modality_kinds")) or ["neural"] * M,
+            "kinds": listify(kw.get("modality_kinds")) or ["signal"] * M,
             "channels": None if mchan is None else [[int(c) for c in cs] for cs in mchan],
         },
         "time": time_meta,
