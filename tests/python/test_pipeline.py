@@ -172,6 +172,12 @@ def test_classification_run_writes_the_contract(tmp_path, tiny_dataset):
     assert m["headline"]["name"] == "balanced_accuracy" and m["summary_lines"]
     mat = scipy.io.loadmat(out / "results.mat")
     assert mat["prob"].shape[1] == 2 and mat["y_true"].min() >= 1
+    # one summary space per fold model: PCs are computed within folds and labelled by fold
+    folds = mat["embedding_fold"].ravel()
+    assert set(folds) == set(range(1, int(folds.max()) + 1)) and len(folds) == mat["embedding_pcs"].shape[0]
+    assert mat["embedding_explained"].shape[0] == int(folds.max())
+    for f in set(folds):
+        assert abs(mat["embedding_pcs"][folds == f, 0].mean()) < 1e-6, "centred within each fold"
     with open(out / "splits.csv") as fh:
         rows = list(csv.DictReader(fh))
     assert min(int(r["trial_index"]) for r in rows) >= 1

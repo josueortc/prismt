@@ -187,6 +187,9 @@ classdef ResultsTab < handle
                 case "Summary space (embedding)"
                     needs = true;
                     if isempty(cols) && isfield(R.Mat, 'class_names'), cols = "true class"; end
+                    if isfield(R.Mat, 'embedding_fold') && max(R.Mat.embedding_fold) > 1
+                        opts = "Fold " + (1:max(R.Mat.embedding_fold));
+                    end
                 case "Predictability by condition"
                     needs = true;
                     opts = maskNames(R);
@@ -252,7 +255,9 @@ classdef ResultsTab < handle
                 case "Summary space (embedding)"
                     by = t.colorValues();
                     if isempty(by), noData(ax); return; end
-                    prismt.plot.embedding(ax, R, by);
+                    fold = 1;
+                    if startsWith(opt, "Fold "), fold = str2double(extractAfter(opt, "Fold ")); end
+                    prismt.plot.embedding(ax, R, by, Fold=fold);
             end
         end
 

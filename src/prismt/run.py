@@ -577,12 +577,22 @@ def _collect(prep: Prepared, outcomes: list[FoldOutcome]) -> tuple[dict, dict]:
     }
     emb = [o.extras.get("embedding") for o in outcomes]
     if all(e is not None for e in emb) and emb:
-        E = np.concatenate(emb)
-        E = E - E.mean(0)
-        k = min(10, E.shape[1], max(E.shape[0] - 1, 1))
-        u, s, vt = np.linalg.svd(E, full_matrices=False)
-        mat["embedding_pcs"] = (u[:, :k] * s[:k]).astype(float)
-        mat["embedding_explained"] = (s[:k] ** 2 / max((s ** 2).sum(), 1e-12)).astype(float)
+        # Each fold has its own model, so its summary space is its own: principal components
+        # are computed within each fold, and folds must be looked at separately.
+        k = min(10, min(e.shape[1] for e in emb))
+        pcs, explained, fold_of = [], np.full((len(emb), k), np.nan), []
+        for fi, (o, E) in enumerate(zip(outcomes, emb)):
+            E = E - E.mean(0)
+            kk = min(k, max(E.shape[0] - 1, 1))
+            u, sv, _ = np.linalg.svd(E, full_matrices=False)
+            P = np.full((E.shape[0], k), np.nan)
+            P[:, :kk] = u[:, :kk] * sv[:kk]
+            pcs.append(P)
+            explained[fi, :kk] = sv[:kk] ** 2 / max((sv ** 2).sum(), 1e-12)
+            fold_of.append(np.full(E.shape[0], o.fold.index + 1.0))
+        mat["embedding_pcs"] = np.concatenate(pcs).astype(float)
+        mat["embedding_explained"] = explained.astype(float)     # folds x components
+        mat["embedding_fold"] = np.concatenate(fold_of)
         mat["embedding_trial_index"] = (sel.trial_index[tested] + 1).astype(float)
     metrics = {
         "schema": "prismt.metrics/1", "task": cfg["task"], "scheme": plan.scheme, "n_folds": len(plan.folds),
