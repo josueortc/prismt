@@ -1,10 +1,18 @@
-# Build the optional container images (not pushed anywhere; publishing needs a decision
-# about the registry first).
+# Build the optional container images and, on main (or a version tag), push them to
+# Docker Hub as josueortc/prismt:cpu and josueortc/prismt:cuda.
+# Pushing needs two repository secrets: DOCKERHUB_USERNAME and DOCKERHUB_TOKEN
+# (a Docker Hub access token with read/write scope). Without them the images are only built.
 name: docker
 on:
   push:
+    branches: [main]
+    tags: ["v*"]
+    paths: [docker/**, src/**, environment.yml, .github/workflows/docker.yml]
+  pull_request:
     paths: [docker/**, environment.yml, .github/workflows/docker.yml]
   workflow_dispatch:
+env:
+  IMAGE: docker.io/josueortc/prismt
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -13,6 +21,27 @@ jobs:
         variant: [cpu, cuda]
     steps:
       - uses: actions/checkout@v5
+      - name: Free disk space (the CUDA image is large)
+        if: matrix.variant == 'cuda'
+        run: sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
       - run: docker build -f docker/Dockerfile --build-arg VARIANT=${{ matrix.variant }} -t prismt:${{ matrix.variant }} .
       - if: matrix.variant == 'cpu'
         run: docker run --rm prismt:cpu doctor
+      - name: Push to Docker Hub
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+        env:
+          USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -z "$USERNAME" ] || [ -z "$TOKEN" ]; then
+            echo "::warning::DOCKERHUB_USERNAME / DOCKERHUB_TOKEN secrets are not set; the image was built but not pushed."
+            exit 0
+          fi
+          echo "$TOKEN" | docker login docker.io -u "$USERNAME" --password-stdin
+          V=${{ matrix.variant }}
+          docker tag prismt:$V $IMAGE:$V
+          docker push $IMAGE:$V
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            docker tag prismt:$V $IMAGE:${GITHUB_REF#refs/tags/}-$V
+            docker push $IMAGE:${GITHUB_REF#refs/tags/}-$V
+          fi

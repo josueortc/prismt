@@ -4,7 +4,8 @@
 #
 #   docker build -f docker/Dockerfile -t prismt:cpu  --build-arg VARIANT=cpu  .
 #   docker build -f docker/Dockerfile -t prismt:cuda --build-arg VARIANT=cuda .
-# On a cluster:  apptainer pull prismt.sif docker://<registry>/prismt:cuda
+# Published images: docker.io/josueortc/prismt:cpu and :cuda (built by .github/workflows/docker.yml).
+# On a cluster:  apptainer pull prismt.sif docker://docker.io/josueortc/prismt:cuda
 #
 # On a Mac, prefer the native environment (environment.yml): containers cannot use the Apple GPU.
 ARG VARIANT=cpu

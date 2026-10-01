@@ -38,7 +38,7 @@ DEFAULT_PROFILE = {
     "conda_env": "prismt",
     "runtime": "conda",
     "image": "prismt.sif",
-    "image_uri": "docker://ghcr.io/josueortc/prismt:cuda",
+    "image_uri": "docker://docker.io/josueortc/prismt:cuda",
     "torch_version": "2.5.1",
     "cuda_tag": "cu121",
     "device": "auto",

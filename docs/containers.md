@@ -19,8 +19,12 @@ docker build -f docker/Dockerfile -t prismt:cpu  --build-arg VARIANT=cpu  .
 docker build -f docker/Dockerfile -t prismt:cuda --build-arg VARIANT=cuda .   # NVIDIA GPUs, CUDA 12.1
 ```
 
-The image has not been published to a registry yet. Until it is, build it yourself, or ask
-whoever maintains PRISMT in your lab for its address.
+Or use the published images, rebuilt on every change to `main`:
+
+```bash
+docker pull josueortc/prismt:cpu
+docker pull josueortc/prismt:cuda
+```
 
 ## On a cluster with Apptainer
 
