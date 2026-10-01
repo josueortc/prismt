@@ -16,6 +16,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3.11 pyth
     ln -sf /usr/bin/python3.11 /usr/local/bin/python && rm -rf /var/lib/apt/lists/*
 ENV TORCH_INDEX=https://download.pytorch.org/whl/cu121
 FROM base-${VARIANT}
+LABEL org.opencontainers.image.title="PRISMT" \
+      org.opencontainers.image.description="Python runtime for PRISMT (transformers for trial-based recordings); code comes from PYTHONPATH" \
+      org.opencontainers.image.source="https://github.com/josueortc/prismt"
 RUN python -m pip install --no-cache-dir "torch==2.5.1" --index-url ${TORCH_INDEX} && \
     python -m pip install --no-cache-dir numpy==2.2.5 scipy==1.15.3 h5py==3.16.0 scikit-learn==1.7.2 optuna==5.0.0
 ENV PYTHONUNBUFFERED=1 MPLBACKEND=Agg HDF5_USE_FILE_LOCKING=FALSE PYTHONPATH=/opt/prismt/src
