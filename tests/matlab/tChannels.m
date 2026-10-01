@@ -79,6 +79,23 @@ classdef tChannels < matlab.unittest.TestCase
             tc.verifyFalse(ismember("channelNames", string(ds.Trials.Properties.VariableNames)));
         end
 
+        function signalsGivenByNameOnTheSameTrials(tc)
+            N = 12; T = 7;
+            neural = rand(N, 5, T); pupil = rand(N, T); speed = rand(N, 1, T);
+            trials = table(repelem(["m1"; "m2"; "m3"], 4), repmat([0; 1], 6, 1), 'VariableNames', {'mouse', 'go'});
+            ds = prismt.makeDataset(struct('neural', neural, 'pupil', pupil, 'speed', speed), trials, ...
+                SamplingRate=30, Subject="mouse", ModalityKinds=["neural", "behavior", "behavior"]);
+            tc.verifyEqual(ds.ModalityNames, ["neural"; "pupil"; "speed"]);
+            tc.verifyEqual(ds.ChannelNames, ["neural_01"; "neural_02"; "neural_03"; "neural_04"; "neural_05"; "pupil"; "speed"]);
+            tc.verifyEqual(ds.ModalityChannels{1}, (1:5)');
+            tc.verifyEqual(ds.ModalityChannels{2}, 6);
+            tc.verifyEqual(squeeze(ds.X(3, 6, :, 2)), single(pupil(3, :))', 'AbsTol', 1e-6);
+            tc.verifyTrue(all(isnan(ds.X(:, 1:5, :, 2)), 'all'), "pupil has no neural channels");
+            tc.verifyEmpty(ds.validate());
+            err = captureError(@() prismt.makeDataset(struct('a', rand(N, 2, T), 'b', rand(N, T + 1)), trials));
+            tc.verifySubstring(string(err.message), "share trials and time points");
+        end
+
         function anyKindOfSignalIsAccepted(tc)
             ds = prismt.makeDataset(rand(6, 2, 3), table((1:6)' > 3, 'VariableNames', {'go'}), ...
                 ModalityNames="heart", ModalityKinds="physiology", ModalityUnits="bpm", SamplingRate=1);

@@ -13,6 +13,15 @@ function ds = makeDataset(X, trials, opts)
 %           condition, response, ... Any names and any number of columns. Use [] if you
 %           have no per-trial information.
 %
+%   Several signals recorded on the same trials (e.g. neural activity and behavior): give X
+%   as a struct with one field per signal, each trials x channels x time, or trials x time
+%   for a single trace such as running speed. Signals may have different numbers of
+%   channels; they must share trials and time points:
+%     X = struct('neural', dff, 'pupil', pupil, 'speed', speed);
+%     ds = prismt.makeDataset(X, trials, SamplingRate=30, Subject="mouse");
+%   The field names become the signal names; channels are named "neural_01", ... (or the
+%   signal name for one-channel signals) unless ChannelNames gives all of them in order.
+%
 %   Recordings with different channels (e.g. electrodes that differ between sessions):
 %   make one dataset per recording and join them with prismt.combineDatasets, which
 %   matches channels by name and marks the ones a recording lacks as missing.
@@ -54,7 +63,7 @@ function ds = makeDataset(X, trials, opts)
 %                             ModalityNames="calcium", ModalityUnits="dF/F");
 %     prismt.writeDataset(ds, "mydata_prismt.mat");
 arguments
-    X {mustBeNumericOrLogical}
+    X {mustBeArrayOrSignals}
     trials = []
     opts.AxisOrder (1, 1) string = "trials,channels,time,modalities"
     opts.SamplingRate double = []
@@ -80,6 +89,9 @@ arguments
 end
 
 ds = prismt.Dataset();
+if isstruct(X)
+    [X, opts] = fromSignals(X, opts);
+end
 ds.X = single(orderAxes(X, opts.AxisOrder));
 [N, R, T, M] = size(ds.X);
 
@@ -193,4 +205,59 @@ for f = string(fieldnames(v))'
         L(end + 1, :) = {f, double(pairs{k, 1}), string(pairs{k, 2})}; %#ok<AGROW>
     end
 end
+end
+
+function mustBeArrayOrSignals(X)
+if ~(isnumeric(X) || islogical(X) || (isstruct(X) && isscalar(X)))
+    error('prismt:E_DATA_SHAPE', 'X must be a numeric array, or a struct with one numeric field per signal.');
+end
+end
+
+function [Y, opts] = fromSignals(S, opts)
+% One field per signal -> trials x (all channels) x time x signals, missing where a signal has no channel.
+names = string(fieldnames(S));
+if isempty(names), error('prismt:E_DATA_SHAPE', 'X has no signals (the struct is empty).'); end
+order = erase(lower(opts.AxisOrder), [",modalities", "modalities,", "modalities"]);
+parts = cell(numel(names), 1);
+for k = 1:numel(names)
+    x = S.(names(k));
+    if ~(isnumeric(x) || islogical(x))
+        error('prismt:E_DATA_SHAPE', 'Signal %s must be numeric.', names(k));
+    end
+    if ismatrix(x)
+        x = reshape(x, size(x, 1), 1, size(x, 2));      % trials x time: one channel
+    else
+        x = orderAxes(x, order);
+    end
+    parts{k} = x;
+end
+N = size(parts{1}, 1); T = size(parts{1}, 3);
+for k = 2:numel(names)
+    if size(parts{k}, 1) ~= N || size(parts{k}, 3) ~= T
+        error('prismt:E_DATA_SHAPE', ['Signal %s has %d trials x %d time points but %s has %d x %d. Signals given ' ...
+            'together must share trials and time points (resample them to a common time base first).'], ...
+            names(k), size(parts{k}, 1), size(parts{k}, 3), names(1), N, T);
+    end
+end
+counts = cellfun(@(x) size(x, 2), parts);
+R = sum(counts);
+Y = nan(N, R, T, numel(names), 'single');
+chanSets = cell(numel(names), 1);
+chanNames = strings(R, 1);
+first = 0;
+for k = 1:numel(names)
+    idx = first + (1:counts(k));
+    Y(:, idx, :, k) = single(parts{k});
+    chanSets{k} = idx(:);
+    if counts(k) == 1
+        chanNames(idx) = names(k);
+    else
+        chanNames(idx) = compose(names(k) + "_%02d", (1:counts(k))');
+    end
+    first = first + counts(k);
+end
+if isempty(opts.ChannelNames), opts.ChannelNames = chanNames; end
+if isempty(opts.ModalityNames), opts.ModalityNames = names; end
+if isempty(opts.ModalityChannels), opts.ModalityChannels = chanSets; end
+opts.AxisOrder = "trials,channels,time,modalities";
 end
