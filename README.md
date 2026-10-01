@@ -72,6 +72,16 @@ effects planted on purpose, so you can see what a real finding looks like.
 Then go back to the **Task** tab, choose **Learn structure (masked autoencoder)**, run it,
 and open *Predictability per channel* in the Results tab.
 
+This is what the demo gives with the standard settings: the two planted effects in the data
+(top), and a classifier of early vs late learning that is right on 91% of the trials of mice
+it never saw, with every mouse well above chance (bottom).
+
+![Demo data: the planted stimulus and learning effects](docs/figures/tutorial/01_data_overview.png)
+
+![Demo classification: learning curves, confusion matrix, score vs reference models, accuracy per mouse](docs/figures/tutorial/02_classification.png)
+
+More example figures, for every task, are in the [tutorial](docs/tutorial.md#example-results-on-the-demo-data).
+
 ## Using your own data, step by step
 
 ### Step 1. Bring your data in (Data tab)

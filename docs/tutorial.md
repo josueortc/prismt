@@ -205,6 +205,37 @@ writes a script that reruns the analysis and draws the plots.
 
 Before interpreting a result, read [results-and-pitfalls.md](results-and-pitfalls.md).
 
+## Example results on the demo data
+
+These figures come from `matlab/examples/prismt_tutorial.m` on the demo data (8 mice, 5-fold
+cross-validation, Quick preset); they are what a working setup should give.
+
+**The data.** The planted stimulus response (CS+ minus CS−, channels 9–10), the planted
+learning effect (late minus early ACh, channels 3–4), condition traces, and trial counts per
+mouse and phase.
+
+![Demo data overview](figures/tutorial/01_data_overview.png)
+
+**Classifying early vs late learning.** One learning curve per fold, the confusion matrix,
+the score against the reference models (0.91 balanced accuracy on new mice; logistic
+regression 0.95; chance 0.50), and accuracy per mouse.
+
+![Classification results](figures/tutorial/02_classification.png)
+
+**Learning structure (masked autoencoder).** One test trial (recorded, what the model saw,
+its reconstruction, the error); R² of hidden values for each hiding pattern against the best
+simple baseline (the model predicts hidden values, and ACh from calcium, where the baselines
+cannot; forecasting is negative because this model was trained with random hiding);
+predictability per channel; and ACh predictability by learning phase.
+
+![Masked autoencoder results](figures/tutorial/03_masked_autoencoder.png)
+
+**Classifying after the autoencoder.** The fine-tuned score, and the test trials of one fold in
+that fold's model summary space (each fold has its own model, so folds are shown one at a
+time), coloured by learning phase.
+
+![Fine-tuned classification](figures/tutorial/04_finetune.png)
+
 ## The same without the app
 
 `matlab/examples/prismt_tutorial.m` does all of the above from a script: demo data,
